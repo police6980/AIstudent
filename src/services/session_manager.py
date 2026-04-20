@@ -30,7 +30,7 @@ from src.config.unit_config import (
 from src.db.database import init_db
 from src.db.repository import SessionRepository
 from src.models.concept_map import ConceptMap
-from src.models.enums import SessionStatus, SessionStep, Speaker
+from src.models.enums import HintType, SessionStatus, SessionStep, Speaker
 from src.models.schemas import Turn, UnitConfig
 from src.services.analysis import run_full_analysis
 from src.services.claude_service import ClaudeService, ClaudeServiceError
@@ -279,6 +279,46 @@ class SessionManager:
             )
 
     # -- DIALOGUE --------------------------------------------------------
+
+    def request_hint(self, session_id: str, hint_type: HintType) -> tuple[Turn, int]:
+        """Record a hint request, generate a scaffolding hint, append as AI turn.
+
+        Returns (new AI turn, hints_remaining_after_use). Raises ValueError if
+        no hints remain.
+        """
+
+        from src.services.hint_generator import generate_hint
+
+        row = self._get_session_or_raise(session_id)
+        self._require_step(row, SessionStep.DIALOGUE)
+
+        remaining = self._repo.get_hints_remaining(session_id)
+        if remaining <= 0:
+            raise ValueError("힌트를 모두 사용했어요.")
+
+        unit_config = UnitConfig.model_validate(row.unit_config_json)
+        history = self._repo.get_turns(session_id)
+
+        # Record the hint request first (decrements counter).
+        self._repo.record_hint_request(session_id, hint_type)
+
+        try:
+            hint_text = generate_hint(hint_type, unit_config, history)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Hint generation failed: %s", exc)
+            hint_text = (
+                "(힌트 생성에 문제가 생겼어요. 다시 시도하거나 다른 유형을 눌러보세요.)"
+            )
+
+        # Prefix so students can tell it apart from the AI's dialogue turns.
+        decorated = f"💡 [{hint_type.value} 힌트] {hint_text}"
+        ai_turn = self._repo.append_turn(
+            session_id,
+            Speaker.AI,
+            decorated,
+            hint_type_used=hint_type,
+        )
+        return ai_turn, remaining - 1
 
     def submit_student_turn(self, session_id: str, student_text: str) -> Turn:
         """Append the student's utterance and return the AI's reply."""

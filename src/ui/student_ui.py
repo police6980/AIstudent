@@ -44,6 +44,32 @@ def _visibility(active: str) -> dict[str, Any]:
     return {name: gr.update(visible=(name == active)) for name in PANES}
 
 
+def _progress_html(active_pane: str) -> str:
+    """Produce the progress-dots HTML with the current pane highlighted."""
+
+    steps = [
+        ("login", "1. 로그인"),
+        ("pre_map", "2. 초기 개념도"),
+        ("dialogue", "3. 대화"),
+        ("post_map", "4. 사후 개념도"),
+        ("reflection", "5. 성찰"),
+        ("completed", "6. 완료"),
+    ]
+    active_idx = next(
+        (i for i, (p, _) in enumerate(steps) if p == active_pane), 0
+    )
+    parts: list[str] = []
+    for i, (_, label) in enumerate(steps):
+        if i < active_idx:
+            parts.append(f"✅ {label}")
+        elif i == active_idx:
+            parts.append(f"🟢 <b>{label}</b>")
+        else:
+            parts.append(f"⚪ {label}")
+    joined = "  →  ".join(parts)
+    return f"<div class='progress-dots'>{joined}</div>"
+
+
 def _step_to_pane(step: SessionStep) -> str:
     return {
         SessionStep.PRE_MAP: "pre_map",
@@ -89,12 +115,32 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
         font=[gr.themes.GoogleFont("Nanum Gothic"), "system-ui", "sans-serif"],
     )
 
-    with gr.Blocks(title="예비교사 과학 설명 훈련", theme=_student_theme) as app:
+    # Minimal extra CSS — softer card look, better readability.
+    _css = """
+    .gradio-container { max-width: 1080px !important; margin: 0 auto !important; }
+    .progress-dots {
+        display: flex; gap: 6px; align-items: center; font-size: 0.92rem;
+        padding: 10px 14px; margin: 10px 0 18px 0;
+        background: linear-gradient(90deg, #EEF2FF, #F8FAFC);
+        border-radius: 12px; border: 1px solid #E2E8F0;
+    }
+    .progress-dots b { color: #3730A3; }
+    footer { display: none !important; }
+    """
+
+    with gr.Blocks(title="예비교사 과학 설명 훈련", theme=_student_theme, css=_css) as app:
         gr.Markdown(
-            "## 🧠 예비교사 과학 설명 훈련\n"
-            "동료 학습자(AI)에게 오늘 배운 단원을 설명하며, 본인의 이해를 깊게 하는 활동입니다. "
-            "**초기 개념도 → 대화 → 사후 개념도 → 성찰** 순서로 진행되며, "
-            "모든 단계를 마치면 리포트가 생성됩니다."
+            """
+            ## 🧠 예비교사 과학 설명 훈련
+            > 동료 학습자(AI)에게 오늘 배운 단원을 설명하며 본인 이해를 깊게 하는 활동입니다.
+            > 모든 단계를 마치면 교수자에게 낼 리포트(PDF)가 생성돼요.
+            """
+        )
+        step_progress = gr.Markdown(
+            "<div class='progress-dots'>"
+            "🟢 <b>1. 로그인</b>  →  ⚪ 2. 초기 개념도  →  ⚪ 3. 대화  "
+            "→  ⚪ 4. 사후 개념도  →  ⚪ 5. 성찰  →  ⚪ 6. 완료"
+            "</div>"
         )
 
         session_state = gr.State(value=None)
@@ -155,17 +201,61 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
             # type='tuples' keeps the legacy [[student, ai], ...] format that
             # _render_history builds. Gradio 5 defaults to 'messages' but both
             # are supported.
-            dialogue_chatbot = gr.Chatbot(label="대화", height=440, type="tuples")
+            dialogue_chatbot = gr.Chatbot(
+                label="대화",
+                height=460,
+                type="tuples",
+                show_copy_button=True,
+                show_label=False,
+                avatar_images=(None, None),
+                bubble_full_width=False,
+            )
             with gr.Row():
                 msg_in = gr.Textbox(
-                    label="내 설명 입력",
-                    placeholder="AI에게 설명하고 싶은 내용을 적고 Enter 또는 보내기를 눌러요.",
+                    label="내 설명",
+                    placeholder="AI에게 설명하고 싶은 내용을 적고 Enter 또는 보내기",
                     lines=2,
-                    scale=5,
+                    scale=6,
+                    show_label=False,
                 )
-                send_btn = gr.Button("보내기", variant="primary", scale=1)
+                send_btn = gr.Button("✉️ 보내기", variant="primary", scale=1, size="lg")
+
+            # -------- Vygotsky scaffolding hints --------
+            with gr.Accordion(
+                "💡 막힐 때 눌러보세요 · 비계 힌트 (남은 횟수 표시)", open=False
+            ):
+                hints_remaining_md = gr.Markdown("남은 힌트: **3회**")
+                gr.Markdown(
+                    "각 힌트는 **서로 다른 방식의 작은 단서**를 줍니다. "
+                    "답을 주지는 않고, 여러분이 다음 스텝을 찾도록 돕는 한 문장이에요."
+                )
+                with gr.Row():
+                    hint_socratic_btn = gr.Button(
+                        "🗣 소크라테스 되묻기", size="sm"
+                    )
+                    hint_bridging_btn = gr.Button(
+                        "🌉 개념 잇기 (다리)", size="sm"
+                    )
+                    hint_counter_btn = gr.Button(
+                        "⚖️ 반례 던지기", size="sm"
+                    )
+                with gr.Row():
+                    hint_evidence_btn = gr.Button(
+                        "🔬 증거·근거", size="sm"
+                    )
+                    hint_repr_btn = gr.Button(
+                        "🎨 표상 바꾸기", size="sm"
+                    )
+                    hint_meta_btn = gr.Button(
+                        "🧠 메타인지", size="sm"
+                    )
+                hint_msg = gr.Markdown("")
+
             with gr.Row():
-                end_dialogue_btn = gr.Button("대화 종료 → 사후 개념도로", variant="stop")
+                end_dialogue_btn = gr.Button(
+                    "✅ 대화 종료 → 사후 개념도로",
+                    variant="stop",
+                )
 
         # =========================================================================
         # Pane 4: POST_MAP
@@ -363,6 +453,37 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
 
         # ---- End dialogue → POST_MAP ----
 
+        def _hint_counter_text(session_id: str | None) -> str:
+            if not session_id:
+                return "남은 힌트: **?**"
+            try:
+                from src.db.repository import SessionRepository
+
+                remaining = SessionRepository().get_hints_remaining(session_id)
+                return f"남은 힌트: **{remaining}회**"
+            except Exception:  # noqa: BLE001
+                return "남은 힌트: **?**"
+
+        def _on_hint(session_id: str | None, hint_type_value: str) -> tuple[Any, Any, Any]:
+            """Common handler for the 6 hint buttons."""
+
+            if not session_id:
+                return gr.update(), "⚠️ 먼저 로그인하세요.", gr.update()
+            try:
+                from src.models.enums import HintType
+
+                ht = HintType(hint_type_value)
+            except ValueError:
+                return gr.update(), "⚠️ 알 수 없는 힌트 유형.", gr.update()
+            try:
+                mgr.request_hint(session_id, ht)
+            except ValueError as exc:
+                return gr.update(), f"⚠️ {exc}", _hint_counter_text(session_id)
+            except (SessionLockedError, LookupError) as exc:
+                return gr.update(), f"⚠️ {exc}", _hint_counter_text(session_id)
+            turns = mgr.get_turns(session_id)
+            return _render_history(turns), "", _hint_counter_text(session_id)
+
         def on_end_dialogue(session_id: str | None) -> tuple[Any, ...]:
             if not session_id:
                 return (*_show("login"), "⚠️ 로그인 먼저 하세요.")
@@ -478,6 +599,22 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
             inputs=[session_state, msg_in],
             outputs=[dialogue_chatbot, dialogue_status, msg_in],
         )
+
+        # Hint button wiring — each one calls _on_hint with its type
+        for _btn, _type_val in [
+            (hint_socratic_btn, "socratic"),
+            (hint_bridging_btn, "bridging"),
+            (hint_counter_btn, "counterexample"),
+            (hint_evidence_btn, "evidence"),
+            (hint_repr_btn, "representation"),
+            (hint_meta_btn, "metacognitive"),
+        ]:
+            # Using closure capture via default arg
+            _btn.click(
+                (lambda sid, tv=_type_val: _on_hint(sid, tv)),
+                inputs=[session_state],
+                outputs=[dialogue_chatbot, hint_msg, hints_remaining_md],
+            )
 
         end_dialogue_btn.click(
             on_end_dialogue,
