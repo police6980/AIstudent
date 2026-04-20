@@ -1,0 +1,58 @@
+unit_code: "photo-01"
+subject: "초등 과학 교과교육"
+unit_name: "광합성"
+target_grade_for_teaching: "초등 6학년"
+
+learning_goals:
+  - "광합성의 조건 (빛, 물, 이산화탄소)"
+  - "광합성의 산물 (포도당, 산소)"
+  - "광합성이 일어나는 장소 (엽록체)"
+  - "식물의 양분 공급 방식 (외부 흡수 vs 스스로 합성)"
+
+rubric_items:
+  - item_id: "condition_light"
+    description: "빛이 광합성의 조건임을 설명"
+    keywords: ["빛", "햇빛", "해", "광에너지"]
+    required: true
+  - item_id: "condition_water"
+    description: "물이 광합성의 조건임을 설명"
+    keywords: ["물", "수분", "뿌리"]
+    required: true
+  - item_id: "condition_co2"
+    description: "이산화탄소가 광합성의 조건임을 설명"
+    keywords: ["이산화탄소", "CO2", "공기"]
+    required: true
+  - item_id: "product_oxygen"
+    description: "산소가 산물임을 설명"
+    keywords: ["산소", "O2"]
+    required: true
+  - item_id: "product_glucose"
+    description: "포도당 등 유기양분이 산물임을 설명"
+    keywords: ["포도당", "양분", "영양분", "녹말"]
+    required: true
+  - item_id: "location_chloroplast"
+    description: "엽록체의 역할을 설명"
+    keywords: ["엽록체", "엽록소", "녹색"]
+    required: false
+
+common_misconceptions:
+  - "식물은 흙에서 양분을 흡수해 자란다"
+  - "광합성은 낮에만, 호흡은 밤에만 일어난다"
+  - "잎의 녹색 색소가 산소를 만든다"
+  - "식물은 광합성만 하고 호흡은 안 한다"
+
+persona_name: "지후"
+persona_role: "같은 단원을 공부하는 교대 동료 학생"
+persona_initial_misconceptions:
+  - "식물은 흙에서 양분을 흡수해 자란다"
+  - "광합성은 낮에만, 호흡은 밤에만 일어난다"
+
+hint_max_count: 3
+hint_types_allowed:
+  - socratic
+  - bridging
+  - metacognitive
+
+session_duration_minutes: 15
+
+instructor_name: "김교수"

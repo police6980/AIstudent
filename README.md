@@ -1,23 +1,17 @@
-# Vygotsky Science Tutor
+# 예비교사 과학 설명 훈련 시스템
 
-초등학생부터 과학고 학생까지 사용 가능한 **AI 대화형 과학 학습 시스템** (MVP).
+교육대학교 학생(예비 교사)이 단원 내용을 **동료 학습자(AI)에게 설명**하면서
+본인 이해를 깊게 하고, 가르치기 역량을 연습하는 **AI 대화형 학습 시스템**입니다.
 
-학생이 **이미 학습한 내용**을 AI 친구에게 **음성으로 설명**하는 과정에서 스스로 개념을
-재조직·심화하도록 돕는다. AI는 답을 주는 튜터가 아니라 **Vygotsky 비계 원리**를 따라
-사고를 촉발하는 동반자다.
+AI는 **오개념을 가진 대학 동료** 역할로, 설명을 들으며 계속 질문하고 점진적으로
+이해를 수정합니다. 세션이 끝나면 교수자용 분석 리포트(PDF)가 생성됩니다.
 
-## 현재 마일스톤: M1 (뼈대)
+## 현재 진행
 
-- ✅ 프로젝트 구조 / 설정 파일
-- ✅ Pydantic 데이터 모델
-- ✅ SQLite 저장 계층
-- ✅ 4-Layer 시스템 프롬프트(학교급 4종)
-- ✅ Claude API 래퍼
-- ✅ 최소 Gradio 텍스트 UI
-- ⏭️ **M2** — 음성 파이프라인 (Whisper STT, ElevenLabs TTS)
-- ⏭️ **M3** — 비계 6유형 + 자기 검증
-- ⏭️ **M4** — 루브릭/오개념 자동 분석, PDF 리포트, 이메일
-- ⏭️ **M5** — 완성도·배포
+- ✅ **Phase A — 인프라**: 단원별 URL, 학생 ID/비밀번호 로그인, 대화 진행·재접속·완료 잠금
+- ⏭️ **Phase B — 분석·리포트**: 오개념 동태 추적, 루브릭/설명 품질 분석, PDF (요약 + 상세)
+- ⏭️ **Phase C — 음성**: Whisper STT + TTS
+- ⏭️ **Phase D — 완성도**: 에러 처리, 테스트, 배포, 데이터 보존 정책 자동화
 
 ## 빠른 시작
 
@@ -27,48 +21,75 @@
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+# .env 파일을 열어 ANTHROPIC_API_KEY 를 채웁니다.
 ```
 
-### 2. 환경 변수 설정
+### 2. 단원 YAML 작성
+
+`configs/example_photosynthesis.yaml` 을 참고해 단원 파일을 만듭니다:
+```yaml
+unit_code: "photo-01"
+unit_name: "광합성"
+persona_name: "지후"
+persona_initial_misconceptions:
+  - "식물은 흙에서 양분을 흡수해 자란다"
+# ...자세한 스키마는 예시 파일 참고
+```
+
+### 3. 학생 계정 30개 생성
 
 ```bash
-cp .env.example .env
-# .env 파일을 열어 ANTHROPIC_API_KEY 를 채운다.
-# M1은 Claude만 있으면 동작한다.
+python -m src.tools.generate_codes configs/photo-01.yaml
 ```
+- `configs/photo-01.yaml` 에 `student_accounts` 가 자동 추가됩니다(s01~s30).
+- `configs/photo-01.accounts.txt` 가 생성됩니다 — **교수자가 학생에게 개별 배포할 ID·비밀번호 목록**.
+- ⚠️ 이 파일과 YAML은 `.gitignore` 되어 있어요 (비밀번호 유출 방지).
 
-### 3. 실행 (M1: 텍스트 대화)
+### 4. 앱 실행
 
 ```bash
 python -m src.main
 ```
 
-브라우저에서 Gradio URL을 열고,
-- 세션 코드: `photo-g6-0420` (예시 YAML)
-- 학생 이름(닉네임 권장) 입력 후 대화를 시작한다.
+학생에게 배포할 URL:
+```
+http://<host>:<port>/?unit=photo-01
+```
+학생은 URL 접속 → 받은 ID/비밀번호 입력 → 대화 → 종료.
 
-### 4. 저장된 세션 확인
+### 5. 저장된 대화 확인
 
 ```bash
 sqlite3 data/sessions.db
-sqlite> .tables
-sqlite> SELECT speaker, content FROM turns ORDER BY turn_index;
+sqlite> SELECT id, unit_code, student_id, status FROM sessions;
+sqlite> SELECT speaker, content FROM turns WHERE session_id='...' ORDER BY turn_index;
 ```
+
+## 세션 정책
+
+| 상황 | 동작 |
+|---|---|
+| ID/비밀번호 처음 사용 | 새 세션 시작 |
+| 진행 중 재접속(끊김 복구) | 같은 세션 이어서 계속 |
+| "대화 종료" 버튼을 누른 뒤 | 같은 ID로 재접속 차단 |
+| 교수자가 재시도 허용 | DB의 해당 세션 `status` 를 `in_progress` 로 수정, 또는 새 ID 할당 |
 
 ## 프로젝트 구조
 
-자세한 설계는 [CLAUDE.md](./CLAUDE.md)와 최상위 설계 문서를 참조.
-
 ```
 src/
-├── config/       환경 변수, YAML 로더
-├── models/       Pydantic 스키마, SQLAlchemy 모델
-├── services/     프롬프트 엔진, Claude 래퍼, 세션 관리자
-├── prompts/      4-Layer 시스템 프롬프트
-├── db/           SQLite 계층
-└── ui/           Gradio 컴포넌트
-configs/          교사 단원 설정 YAML
+├── config/        환경변수 + YAML 로더
+├── models/        Pydantic + SQLAlchemy
+├── prompts/       4-Layer 시스템 프롬프트
+├── services/      scaffolding_engine, claude_service, session_manager
+├── tools/         CLI: generate_codes
+├── db/            SQLite 계층
+└── ui/            Gradio 컴포넌트
+configs/           단원 YAML (실제 파일은 gitignore)
 ```
+
+자세한 개발 원칙은 [CLAUDE.md](./CLAUDE.md) 참조.
 
 ## 개발
 
@@ -81,11 +102,6 @@ pytest
 
 ## 라이선스 / 프라이버시
 
-- 학생 음성 원본은 STT 직후 즉시 삭제(기본값). `.env`의 `KEEP_AUDIO_FILES=true`로만 유지.
+- `.env` 와 `configs/<real>.yaml` (실계정 포함) 은 절대 커밋하지 않습니다.
+- 학생 음성 원본은 STT 직후 즉시 삭제(Phase C).
 - 세션 데이터 기본 30일 보존.
-- 학생에게 **실명 대신 닉네임** 입력을 권장한다.
-
-## 참고
-
-본 시스템의 이론적 기반(Vygotsky ZPD, Learning by Teaching, Protégé Effect)과 전체 설계는
-저장소에 동봉된 상위 설계 문서를 참조.

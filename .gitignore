@@ -4,6 +4,13 @@
 *.pem
 *.key
 
+# Unit configs with real student credentials — keep only example files.
+configs/*.yaml
+configs/*.yml
+configs/*.accounts.txt
+!configs/example_*.yaml
+!configs/example_*.yml
+
 # Python
 __pycache__/
 *.py[cod]
