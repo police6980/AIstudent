@@ -1,17 +1,17 @@
-"""Pydantic schemas for configs, turns, hints, and reports."""
+"""Pydantic schemas for configs, accounts, turns, hints, and reports."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
-from src.models.enums import GradeLevel, HintType, Speaker
+from src.models.enums import HintType, SessionStatus, Speaker
 
 
 class RubricItem(BaseModel):
-    """One learning-goal rubric item defined by the teacher."""
+    """One learning-goal rubric item defined by the instructor."""
 
     item_id: str
     description: str
@@ -19,24 +19,37 @@ class RubricItem(BaseModel):
     required: bool = True
 
 
-class UnitConfig(BaseModel):
-    """Teacher-authored configuration for a single session/unit."""
+class StudentAccount(BaseModel):
+    """A single student's login credentials for a unit."""
 
-    session_code: str
-    grade_level: GradeLevel
-    subject: str
-    unit_name: str
+    id: str
+    password: str
+
+
+class UnitConfig(BaseModel):
+    """Instructor-authored configuration for a single unit.
+
+    A unit corresponds to a URL (?unit=<unit_code>) that the instructor shares
+    with students. Each unit has its own student accounts.
+    """
+
+    unit_code: str                                # URL slug, e.g. "photo-01"
+    subject: str                                  # e.g. "과학" or "초등 과학 교육론"
+    unit_name: str                                # e.g. "광합성"
+    target_grade_for_teaching: Optional[str] = None  # e.g. "초등 6학년" — the grade the preservice teacher expects to teach
     learning_goals: list[str]
     rubric_items: list[RubricItem]
     common_misconceptions: list[str] = Field(default_factory=list)
-    persona_name: str
-    persona_role: str
+    persona_name: str                             # AI peer-learner's name
+    persona_role: str = "이해가 부족하고 오개념을 가진 동료 학습자"
+    persona_initial_misconceptions: list[str] = Field(default_factory=list)
+    # subset of common_misconceptions the AI actively holds at session start
     hint_max_count: int = 3
     hint_types_allowed: list[HintType] = Field(default_factory=list)
     session_duration_minutes: int = 15
     textbook_content: Optional[str] = None
-    teacher_email: str  # kept as str (not EmailStr) to avoid email-validator dep in MVP
-    teacher_name: str
+    instructor_name: str
+    student_accounts: list[StudentAccount] = Field(default_factory=list)
 
 
 class Turn(BaseModel):
@@ -61,11 +74,23 @@ class HintRequest(BaseModel):
     hints_remaining_before: int
 
 
-class SessionReport(BaseModel):
-    """Teacher-facing report produced at session end (Milestone 4)."""
+class SessionInfo(BaseModel):
+    """Summary of a session row (Phase A surface)."""
 
     session_id: str
-    student_name: str
+    unit_code: str
+    student_id: str
+    persona_name: str
+    start_time: datetime
+    end_time: Optional[datetime]
+    status: SessionStatus
+
+
+class SessionReport(BaseModel):
+    """Teacher-facing report produced at session end (Phase B)."""
+
+    session_id: str
+    student_id: str
     unit_config: UnitConfig
     start_time: datetime
     end_time: datetime
@@ -78,12 +103,12 @@ class SessionReport(BaseModel):
     recommendations: list[str] = Field(default_factory=list)
 
 
-# Re-export EmailStr so tests/other modules can import from one place if needed.
 __all__ = [
-    "EmailStr",
     "RubricItem",
+    "StudentAccount",
     "UnitConfig",
     "Turn",
     "HintRequest",
+    "SessionInfo",
     "SessionReport",
 ]

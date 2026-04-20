@@ -1,21 +1,25 @@
 """Data models: enums, Pydantic schemas, SQLAlchemy tables."""
 
-from src.models.enums import GradeLevel, HintType, Speaker
+from src.models.enums import HintType, SessionStatus, Speaker
 from src.models.schemas import (
     HintRequest,
     RubricItem,
+    SessionInfo,
     SessionReport,
+    StudentAccount,
     Turn,
     UnitConfig,
 )
 
 __all__ = [
-    "GradeLevel",
     "HintType",
+    "SessionStatus",
     "Speaker",
     "RubricItem",
+    "StudentAccount",
     "UnitConfig",
     "Turn",
     "HintRequest",
+    "SessionInfo",
     "SessionReport",
 ]

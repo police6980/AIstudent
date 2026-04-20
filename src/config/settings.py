@@ -8,7 +8,6 @@ from functools import lru_cache
 
 from dotenv import load_dotenv
 
-# Load .env once at import time. Safe no-op if the file is missing.
 load_dotenv()
 
 
@@ -34,15 +33,11 @@ class Settings:
     """Immutable runtime settings snapshot."""
 
     anthropic_api_key: str | None
-    claude_model: str
+    claude_model: str           # dialogue model — default Sonnet
+    claude_analysis_model: str  # report analysis model — default Opus
     openai_api_key: str | None
     elevenlabs_api_key: str | None
     elevenlabs_voice_id: str | None
-    smtp_host: str | None
-    smtp_port: int
-    smtp_user: str | None
-    smtp_password: str | None
-    smtp_from_address: str | None
     database_url: str
     report_dir: str
     log_level: str
@@ -52,19 +47,13 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return a cached Settings object built from the environment."""
-
     return Settings(
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         claude_model=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6"),
+        claude_analysis_model=os.getenv("CLAUDE_ANALYSIS_MODEL", "claude-opus-4-7"),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY"),
         elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID"),
-        smtp_host=os.getenv("SMTP_HOST"),
-        smtp_port=_env_int("SMTP_PORT", 587),
-        smtp_user=os.getenv("SMTP_USER"),
-        smtp_password=os.getenv("SMTP_PASSWORD"),
-        smtp_from_address=os.getenv("SMTP_FROM_ADDRESS"),
         database_url=os.getenv("DATABASE_URL", "sqlite:///data/sessions.db"),
         report_dir=os.getenv("REPORT_DIR", "data/reports"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),

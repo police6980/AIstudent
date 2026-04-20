@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM tables for sessions, turns, and hint requests."""
+"""SQLAlchemy ORM tables for sessions, turns, hint requests, and analyses."""
 
 from __future__ import annotations
 
@@ -13,20 +13,21 @@ class Base(DeclarativeBase):
 
 
 class SessionRow(Base):
-    """One student-AI session."""
+    """One preservice teacher — AI peer-learner session."""
 
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    session_code: Mapped[str] = mapped_column(String(64), index=True)
-    student_name: Mapped[str] = mapped_column(String(128))
-    grade_level: Mapped[str] = mapped_column(String(32))
+    unit_code: Mapped[str] = mapped_column(String(64), index=True)
+    student_id: Mapped[str] = mapped_column(String(64), index=True)
     unit_name: Mapped[str] = mapped_column(String(128))
     persona_name: Mapped[str] = mapped_column(String(64))
     unit_config_json: Mapped[dict] = mapped_column(JSON)
     start_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     end_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="in_progress", index=True)
     hints_remaining: Mapped[int] = mapped_column(Integer, default=0)
+    analysis_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     turns: Mapped[list[TurnRow]] = relationship(
         back_populates="session", cascade="all, delete-orphan", order_by="TurnRow.turn_index"

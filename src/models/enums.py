@@ -1,19 +1,10 @@
-"""Enums for grade levels, hint types, and speaker roles."""
+"""Enums for hint types, session states, and speaker roles."""
 
 from enum import Enum
 
 
-class GradeLevel(str, Enum):
-    """School stage for Vygotsky scaffolding variation."""
-
-    ELEMENTARY = "elementary"
-    MIDDLE = "middle"
-    HIGH = "high"
-    SCIENCE_HIGH = "science_high"
-
-
 class HintType(str, Enum):
-    """Six scaffolding hint types (Vygotsky-aligned)."""
+    """Six scaffolding hint types (Vygotsky-aligned). Used from Milestone B+."""
 
     SOCRATIC = "socratic"
     BRIDGING = "bridging"
@@ -26,5 +17,12 @@ class HintType(str, Enum):
 class Speaker(str, Enum):
     """Who produced a given turn."""
 
-    STUDENT = "student"
-    AI = "ai"
+    STUDENT = "student"   # preservice teacher (the explainer)
+    AI = "ai"             # peer-learner persona with misconceptions
+
+
+class SessionStatus(str, Enum):
+    """Lifecycle of a session."""
+
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
