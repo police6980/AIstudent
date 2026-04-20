@@ -1,8 +1,8 @@
 """Hugging Face Spaces entrypoint.
 
-HF Spaces looks for `demo` (or `app`) in app.py and auto-launches it.
-We reuse the same student + instructor composition as src.main, but
-without `share=True` (Spaces provides its own public URL).
+HF Spaces looks for `demo` in app.py and auto-launches it. We reuse the
+same student + instructor composition as src.main, but without
+`share=True` (Spaces provides its own public URL).
 
 Environment variables (set these as HF Space Secrets):
     ANTHROPIC_API_KEY      — required for all AI calls
@@ -12,48 +12,6 @@ Environment variables (set these as HF Space Secrets):
 """
 
 from __future__ import annotations
-
-
-def _patch_gradio_client_bool_schema_bug() -> None:
-    """Monkey-patch gradio_client.utils so it tolerates bool JSON-schema values.
-
-    Pydantic v2 emits ``additionalProperties: false`` (a Python bool) on
-    many models. gradio 4.44.x bundles gradio_client 1.3, whose
-    ``get_type(schema)`` assumes ``schema`` is always a dict and does
-    ``if "const" in schema``, which raises:
-
-        TypeError: argument of type 'bool' is not iterable
-
-    HF Spaces hits the `main` route at boot, which eagerly calls
-    ``get_api_info()``; the exception cascades into "localhost not
-    accessible" and the Space never comes up. ``show_api=False`` doesn't
-    help because the route still runs api_info internally.
-
-    We intercept both entrypoints and return "Any" when the schema is a
-    bool. The API docs page is something students never see anyway.
-    """
-
-    import gradio_client.utils as _gcu
-
-    _orig_get_type = _gcu.get_type
-    _orig_jspt = _gcu._json_schema_to_python_type
-
-    def _safe_get_type(schema):
-        if isinstance(schema, bool):
-            return "Any"
-        return _orig_get_type(schema)
-
-    def _safe_jspt(schema, defs=None):
-        if isinstance(schema, bool):
-            return "Any"
-        return _orig_jspt(schema, defs)
-
-    _gcu.get_type = _safe_get_type
-    _gcu._json_schema_to_python_type = _safe_jspt
-
-
-_patch_gradio_client_bool_schema_bug()
-
 
 import logging
 
@@ -102,4 +60,4 @@ with gr.Blocks(title="예비교사 과학 설명 훈련") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(show_api=False)
+    demo.launch()

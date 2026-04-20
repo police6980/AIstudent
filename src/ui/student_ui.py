@@ -131,7 +131,10 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
         with gr.Group(visible=False) as dialogue_pane:
             gr.Markdown("### 3단계. 동료 학습자와의 대화")
             dialogue_status = gr.Markdown("")
-            dialogue_chatbot = gr.Chatbot(label="대화", height=440)
+            # type='tuples' keeps the legacy [[student, ai], ...] format that
+            # _render_history builds. Gradio 5 defaults to 'messages' but both
+            # are supported.
+            dialogue_chatbot = gr.Chatbot(label="대화", height=440, type="tuples")
             with gr.Row():
                 msg_in = gr.Textbox(
                     label="내 설명 입력",
