@@ -47,8 +47,14 @@ class UnitConfig(BaseModel):
     hint_max_count: int = 3
     hint_types_allowed: list[HintType] = Field(default_factory=list)
     session_duration_minutes: int = 15
+    # Teaching material the AI can reference during the dialogue (RAG-lite).
+    # Also used by the auto-generator to extract goals/rubric/misconceptions.
     textbook_content: Optional[str] = None
     instructor_name: str
+    # Login mode:
+    #   "open"         — any student enters their 학번 + 이름; no preset accounts
+    #   "account_list" — legacy: preset id/password pairs in student_accounts
+    student_login_mode: str = "open"
     student_accounts: list[StudentAccount] = Field(default_factory=list)
 
 

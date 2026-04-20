@@ -26,7 +26,12 @@ class SessionRepository:
 
     # -- sessions --------------------------------------------------------
 
-    def create_session(self, unit_config: UnitConfig, student_id: str) -> str:
+    def create_session(
+        self,
+        unit_config: UnitConfig,
+        student_id: str,
+        student_name: str | None = None,
+    ) -> str:
         """Create a new in_progress session for (unit_code, student_id)."""
 
         session_id = _new_id()
@@ -35,6 +40,7 @@ class SessionRepository:
                 id=session_id,
                 unit_code=unit_config.unit_code,
                 student_id=student_id,
+                student_name=(student_name or "").strip() or None,
                 unit_name=unit_config.unit_name,
                 persona_name=unit_config.persona_name,
                 unit_config_json=unit_config.model_dump(mode="json"),

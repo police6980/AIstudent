@@ -89,6 +89,7 @@ def isolated_env(tmp_path, monkeypatch):
                 "persona_name": "지후",
                 "persona_initial_misconceptions": ["오개념"],
                 "instructor_name": "김교수",
+                "student_login_mode": "account_list",
                 "student_accounts": [
                     {"id": "s01", "password": "abc12"},
                     {"id": "s02", "password": "xyz98"},
@@ -310,3 +311,77 @@ def test_two_students_independent_steps(isolated_env, monkeypatch):
     # s02 still at PRE_MAP.
     resumed_b = mgr.login("t-01", "s02", "xyz98")
     assert resumed_b.current_step == SessionStep.PRE_MAP
+
+
+# --------- open login mode ---------
+
+
+@pytest.fixture
+def open_mode_env(tmp_path, monkeypatch):
+    """Same setup as isolated_env but the unit uses student_login_mode: open."""
+
+    db_path = tmp_path / "t.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
+    Base.metadata.drop_all(bind=get_engine())
+    Base.metadata.create_all(bind=get_engine())
+
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir()
+    (configs_dir / "open.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "unit_code": "open-01",
+                "subject": "과학",
+                "unit_name": "개방 단원",
+                "learning_goals": ["A"],
+                "rubric_items": [
+                    {"item_id": "r1", "description": "A", "keywords": ["A"], "required": True}
+                ],
+                "common_misconceptions": ["x"],
+                "persona_name": "지후",
+                "persona_initial_misconceptions": ["x"],
+                "instructor_name": "김교수",
+                "student_login_mode": "open",
+                # No student_accounts in open mode
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    yield configs_dir
+
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
+
+
+def test_open_mode_allows_anyone_with_student_id_and_name(open_mode_env, monkeypatch):
+    mgr = _mgr(open_mode_env, monkeypatch)
+    result = mgr.login("open-01", "2021001", student_name="홍길동")
+    assert result.is_new is True
+    assert result.session_id
+
+
+def test_open_mode_requires_name(open_mode_env, monkeypatch):
+    mgr = _mgr(open_mode_env, monkeypatch)
+    with pytest.raises(AuthenticationError):
+        mgr.login("open-01", "2021001")  # name missing
+
+
+def test_open_mode_requires_student_id(open_mode_env, monkeypatch):
+    mgr = _mgr(open_mode_env, monkeypatch)
+    with pytest.raises(AuthenticationError):
+        mgr.login("open-01", "", student_name="홍길동")
+
+
+def test_open_mode_resumes_same_student(open_mode_env, monkeypatch):
+    mgr = _mgr(open_mode_env, monkeypatch)
+    r1 = mgr.login("open-01", "2021001", student_name="홍길동")
+    r2 = mgr.login("open-01", "2021001", student_name="홍길동")
+    assert r1.session_id == r2.session_id
+    assert r2.is_new is False

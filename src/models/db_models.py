@@ -19,7 +19,8 @@ class SessionRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     unit_code: Mapped[str] = mapped_column(String(64), index=True)
-    student_id: Mapped[str] = mapped_column(String(64), index=True)
+    student_id: Mapped[str] = mapped_column(String(64), index=True)  # 학번 in open mode
+    student_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     unit_name: Mapped[str] = mapped_column(String(128))
     persona_name: Mapped[str] = mapped_column(String(64))
     unit_config_json: Mapped[dict] = mapped_column(JSON)

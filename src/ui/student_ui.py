@@ -98,12 +98,29 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
             gr.Markdown("### 1단계. 로그인")
             unit_display = gr.Markdown("*단원 정보를 확인하는 중...*")
             with gr.Row():
-                sid_in = gr.Textbox(label="학생 ID", placeholder="예: s01", scale=2)
+                sid_in = gr.Textbox(
+                    label="학번",
+                    placeholder="예: 2021001",
+                    scale=2,
+                )
+                name_in = gr.Textbox(
+                    label="이름",
+                    placeholder="예: 홍길동",
+                    scale=2,
+                )
                 pw_in = gr.Textbox(
-                    label="비밀번호(5자리)", placeholder="5자리", type="password", scale=2
+                    label="비밀번호(선택, 예전 방식만)",
+                    placeholder="보통 비워두세요",
+                    type="password",
+                    scale=1,
                 )
                 login_btn = gr.Button("시작하기", variant="primary", scale=1)
             login_msg = gr.Markdown("")
+            gr.Markdown(
+                "🧑‍🏫 교수자이신가요? "
+                "[관리자 페이지로 이동](?admin=true) · "
+                "브라우저 주소 끝에 `?admin=true` 를 붙여도 됩니다.",
+            )
 
         # =========================================================================
         # Pane 2: PRE_MAP
@@ -250,10 +267,13 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
                 mgr.load_unit(code)
             except AuthenticationError as exc:
                 return f"⚠️ {exc}", ""
-            return f"**단원 코드:** `{code}`\n\n학생 ID와 비밀번호를 입력하세요.", code
+            return (
+                f"**단원 코드:** `{code}`\n\n학번과 이름을 입력하세요.",
+                code,
+            )
 
         def on_login(
-            unit_code: str, sid: str, pw: str
+            unit_code: str, sid: str, name: str, pw: str
         ) -> tuple[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]:
             if not unit_code:
                 return (
@@ -264,16 +284,17 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
                     [],
                 )
             try:
-                result = mgr.login(unit_code, sid, pw)
+                result = mgr.login(unit_code, sid, pw, student_name=name)
             except AuthenticationError as exc:
                 return (*_show("login"), None, f"⚠️ {exc}", "", [])
             except SessionLockedError as exc:
                 return (*_show("login"), None, f"🔒 {exc}", "", [])
 
             pane = _step_to_pane(result.current_step)
+            greeting_id = f"{sid} ({name})" if name else sid
             status = (
                 f"**{result.unit_config.persona_name}** 와 대화 중 · "
-                f"단원: {result.unit_config.unit_name} · ID: `{sid}`"
+                f"단원: {result.unit_config.unit_name} · ID: `{greeting_id}`"
             )
             return (
                 *_show(pane),
@@ -398,7 +419,7 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
 
         login_btn.click(
             on_login,
-            inputs=[unit_code_state, sid_in, pw_in],
+            inputs=[unit_code_state, sid_in, name_in, pw_in],
             outputs=[
                 login_pane,
                 pre_map_pane,

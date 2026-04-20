@@ -100,18 +100,42 @@ class SessionManager:
         except UnitConfigError as exc:
             raise AuthenticationError(f"단원을 찾을 수 없어요: {exc}") from exc
 
-    def login(self, unit_code: str, student_id: str, password: str) -> LoginResult:
-        """Authenticate, then resume or create a session at the appropriate step."""
+    def login(
+        self,
+        unit_code: str,
+        student_id: str,
+        password: str = "",
+        student_name: str = "",
+    ) -> LoginResult:
+        """Authenticate, then resume or create a session at the appropriate step.
+
+        Two login modes (chosen per-unit by the instructor):
+          - "open":         student_id = 학번, password ignored, student_name required
+          - "account_list": legacy — student_id + password must match a preset account
+        """
 
         unit_config = self.load_unit(unit_code)
-        if not authenticate(unit_config, student_id, password):
-            raise AuthenticationError("학생 ID 또는 비밀번호가 올바르지 않아요.")
+
+        mode = (getattr(unit_config, "student_login_mode", "open") or "open").strip()
+        if mode == "open":
+            student_id = (student_id or "").strip()
+            student_name = (student_name or "").strip()
+            if not student_id:
+                raise AuthenticationError("학번을 입력해주세요.")
+            if not student_name:
+                raise AuthenticationError("이름을 입력해주세요.")
+        else:
+            if not authenticate(unit_config, student_id, password):
+                raise AuthenticationError(
+                    "학생 ID 또는 비밀번호가 올바르지 않아요."
+                )
 
         existing = self._repo.find_session(unit_code, student_id)
 
         if existing is None:
-            # Fresh session — starts at PRE_MAP. AI greeting waits until map submission.
-            session_id = self._repo.create_session(unit_config, student_id)
+            session_id = self._repo.create_session(
+                unit_config, student_id, student_name=student_name or None
+            )
             return LoginResult(
                 session_id=session_id,
                 unit_config=unit_config,

@@ -200,79 +200,83 @@ def build_instructor_app() -> gr.Blocks:
                             scale=2,
                         )
 
-                    with gr.Row():
-                        auto_persona_in = gr.Textbox(
-                            label="AI 동료 이름 (비워두면 '지후')",
-                            placeholder="지후",
-                            scale=2,
-                        )
-                        auto_account_count_in = gr.Number(
-                            label="학생 계정 수",
-                            value=30,
-                            precision=0,
-                            scale=1,
-                        )
+                    auto_persona_in = gr.Textbox(
+                        label="AI 동료 이름 (비워두면 '지후')",
+                        placeholder="지후",
+                    )
 
                     auto_content_in = gr.Textbox(
-                        label="📄 교안·교재·메모 (여기에 붙여넣기)",
+                        label="📄 교안·교재·메모 (학생 대화 중에도 AI 가 참고)",
                         placeholder=(
-                            "이 단원에 대한 수업 계획, 교과서 발췌, 학습 목표 요약, "
-                            "또는 인터넷에서 찾은 관련 자료 등을 길게 붙여넣어도 됩니다.\n"
-                            "예시)\n"
+                            "여기에 수업 계획, 교과서 발췌, 핵심 개념, 관련 자료 등을 붙여넣으세요.\n"
+                            "• AI 가 학생과 대화하는 중에 **보충 자료로 참고** 합니다.\n"
+                            "• 'AI 로 자동 생성' 버튼을 누르면 이 내용에서 학습 목표·루브릭·오개념을 추출합니다.\n"
+                            "  (자동 생성 쓰기 싫으면 아래 미리보기 필드들을 직접 채우고 바로 저장해도 됨)\n"
+                            "\n예)\n"
                             "광합성은 식물이 빛, 물, 이산화탄소를 이용해 포도당과 산소를 만드는 과정이다. "
                             "주로 엽록체에서 일어나며, 초등학생들이 자주 가지는 오개념으로는..."
                         ),
-                        lines=12,
+                        lines=10,
                     )
 
                     with gr.Row():
                         auto_generate_btn = gr.Button(
-                            "🤖 AI로 단원 설정 자동 생성", variant="primary", scale=2
+                            "🤖 AI로 학습목표·루브릭·오개념 자동 추출 (선택)",
+                            variant="secondary",
+                            scale=2,
                         )
                         auto_save_btn = gr.Button(
-                            "💾 저장 + 학생 계정 30개 생성", variant="stop", scale=2
+                            "💾 저장 + 학생 링크 만들기",
+                            variant="primary",
+                            scale=2,
                         )
 
-                    auto_status = gr.Markdown("")
+                    auto_status = gr.Markdown(
+                        "ℹ️ 본 시스템은 **학번 + 이름** 만 입력하면 로그인되므로, "
+                        "학생 계정을 미리 만들 필요가 없습니다. 저장하면 바로 학생 링크가 생성됩니다."
+                    )
 
-                    gr.Markdown("### 미리보기 (필요하면 여기서 수정 후 저장)")
+                    gr.Markdown(
+                        "### ✍️ 단원 세부 설정 — 직접 입력하거나 AI 로 채운 뒤 수정"
+                    )
                     auto_preview_subject = gr.Textbox(
                         label="과목", value="과학", interactive=True
                     )
                     auto_preview_goals = gr.Textbox(
                         label="학습 목표 (한 줄에 하나)",
+                        placeholder="예)\n광합성의 조건 (빛, 물, 이산화탄소)\n광합성의 산물 (포도당, 산소)",
                         lines=5,
                         interactive=True,
                     )
                     auto_preview_rubric = gr.Textbox(
-                        label="루브릭 (JSON, AI 생성 결과)",
+                        label="루브릭 (JSON — AI 생성 시 자동 채워짐. 직접 편집도 가능)",
+                        placeholder='[\n  {"item_id": "r_light", "description": "빛이 조건", "keywords": ["빛", "햇빛"], "required": true}\n]',
                         lines=8,
                         interactive=True,
                     )
                     auto_preview_miscons = gr.Textbox(
                         label="알려진 오개념 (한 줄에 하나)",
+                        placeholder="예)\n식물은 흙에서 양분을 흡수해 자란다\n광합성은 낮에만 일어난다",
                         lines=5,
                         interactive=True,
                     )
                     auto_preview_ai_miscons = gr.Textbox(
                         label="AI 페르소나가 처음에 품고 있을 오개념 (1~2개, 한 줄에 하나)",
+                        placeholder="예)\n식물은 흙에서 양분을 흡수해 자란다",
                         lines=3,
                         interactive=True,
                     )
 
-                    gr.Markdown("### 🔗 학생에게 배포할 링크 + 계정")
+                    gr.Markdown("### 🔗 학생에게 배포할 링크")
                     auto_student_link_out = gr.Textbox(
-                        label="학생 접속 URL (저장 후 채워짐)", interactive=False
-                    )
-                    auto_accounts_df = gr.Dataframe(
-                        headers=["학생 ID", "비밀번호"],
-                        value=[],
+                        label="학생 접속 URL (저장 후 여기에 채워짐)",
                         interactive=False,
-                        wrap=True,
                     )
                     gr.Markdown(
-                        "💡 **복사해서 학생에게 전달**하세요. `data/reports/` 에도 "
-                        "학생 활동이 끝날 때마다 PDF 가 자동 저장됩니다."
+                        "💡 학생은 이 링크만 있으면 됩니다.\n"
+                        "- 학번 + 이름 입력으로 로그인 (비밀번호 불필요)\n"
+                        "- 같은 링크로 **여러 학생 동시 접속** 가능\n"
+                        "- 활동 끝나면 학생이 PDF 다운로드 + 교수님 `data\\reports\\` 폴더에도 자동 저장"
                     )
 
                 # ====== Tab 1: 단원 관리 (상세/고급) ======
@@ -622,19 +626,15 @@ def build_instructor_app() -> gr.Blocks:
             unit_name: str,
             target_grade: str,
             persona_name: str,
-            account_count: float,
             subject: str,
             goals_text: str,
             rubric_json: str,
             miscon_text: str,
             ai_miscon_text: str,
-        ) -> tuple[str, str, Any]:
-            """Save the unit YAML + generate N student accounts, show them in a table."""
+            textbook_text: str,
+        ) -> tuple[str, str]:
+            """Save the unit YAML in open login mode (no preset accounts)."""
 
-            try:
-                count = max(1, int(account_count or 30))
-            except (TypeError, ValueError):
-                count = 30
             try:
                 unit = _parse_preview_to_unit(
                     unit_code=unit_code,
@@ -647,33 +647,29 @@ def build_instructor_app() -> gr.Blocks:
                     miscon_text=miscon_text,
                     ai_miscon_text=ai_miscon_text,
                 )
-            except (ValueError, Exception) as exc:  # noqa: BLE001
-                return f"⚠️ 저장 실패: {exc}", "", []
-
-            try:
-                unit = fill_student_accounts(unit, count=count)
             except Exception as exc:  # noqa: BLE001
-                return f"⚠️ 계정 생성 실패: {exc}", "", []
+                return f"⚠️ 저장 실패: {exc}", ""
+
+            # Attach textbook content + set open login mode
+            if textbook_text and textbook_text.strip():
+                unit.textbook_content = textbook_text.strip()
+            unit.student_login_mode = "open"
 
             try:
                 save_unit_config(unit, configs_dir=CONFIGS_DIR)
             except Exception as exc:  # noqa: BLE001
-                return f"⚠️ YAML 저장 실패: {exc}", "", []
-
-            # Build student accounts table
-            rows = [[a.id, a.password] for a in unit.student_accounts]
+                return f"⚠️ YAML 저장 실패: {exc}", ""
 
             link_hint = (
-                f"<현재_공개URL>/?unit={unit.unit_code}\n"
-                "(3_run_app.bat 실행 시 터미널에 뜨는 "
-                "'Running on public URL' 부분을 앞에 붙이세요)"
+                f"<공개URL>/?unit={unit.unit_code}\n"
+                "('3_run_app.bat' 실행 시 터미널의 'Running on public URL:' 주소를 앞에 붙이세요)"
             )
 
             return (
-                f"✅ **{unit.unit_code}** 저장 완료. 학생 {count}명 계정 생성됨.\n"
+                f"✅ **{unit.unit_code}** 저장 완료.\n"
+                f"학생은 이 링크로 접속 → 학번+이름 입력만 하면 바로 시작.\n"
                 f"단원 YAML: `configs/{unit.unit_code}.yaml`",
                 link_hint,
-                rows,
             )
 
         # -- Tab 1 handlers --
@@ -927,14 +923,14 @@ def build_instructor_app() -> gr.Blocks:
                 auto_unit_name_in,
                 auto_target_grade_in,
                 auto_persona_in,
-                auto_account_count_in,
                 auto_preview_subject,
                 auto_preview_goals,
                 auto_preview_rubric,
                 auto_preview_miscons,
                 auto_preview_ai_miscons,
+                auto_content_in,
             ],
-            outputs=[auto_status, auto_student_link_out, auto_accounts_df],
+            outputs=[auto_status, auto_student_link_out],
         )
 
         # Tab 1
