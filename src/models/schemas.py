@@ -56,6 +56,11 @@ class UnitConfig(BaseModel):
     #   "account_list" — legacy: preset id/password pairs in student_accounts
     student_login_mode: str = "open"
     student_accounts: list[StudentAccount] = Field(default_factory=list)
+    # When True, the AI is allowed to use Anthropic's server-side web_search
+    # tool during student dialogue — helpful for fetching concrete examples
+    # or analogies beyond the pasted textbook_content. Off by default to keep
+    # the default cost/latency footprint low.
+    web_search_enabled: bool = False
 
 
 class Turn(BaseModel):

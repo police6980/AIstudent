@@ -179,105 +179,136 @@ def build_instructor_app() -> gr.Blocks:
                 # ====== Tab 0: 간편 단원 생성 (new default) ======
                 with gr.Tab("✨ 간편 단원 생성"):
                     gr.Markdown(
-                        "### 교안·교재 내용을 붙여넣기만 하면 단원 설정을 **AI 가 자동으로 생성**합니다.\n"
-                        "그 다음 버튼 한 번으로 학생 계정 30개까지 바로 만들어 드려요."
+                        "## 4단계로 단원 만들기\n"
+                        "각 단계 완료하고 맨 아래 **💾 저장** 을 누르면 학생 접속 링크가 바로 생성됩니다."
                     )
 
-                    with gr.Row():
-                        auto_unit_code_in = gr.Textbox(
-                            label="단원 코드 (URL에 쓸 짧은 이름)",
-                            placeholder="예: photo-01, solution-01",
-                            scale=2,
+                    # -------- STEP 1: 단원 기본 정보 --------
+                    with gr.Accordion("🧩 1단계 · 단원 기본 정보", open=True):
+                        with gr.Row():
+                            auto_unit_code_in = gr.Textbox(
+                                label="단원 코드",
+                                placeholder="URL에 쓸 짧은 이름 (예: photo-01)",
+                                info="영문·숫자·하이픈만. URL이 https://.../?unit=<여기> 가 됩니다.",
+                                scale=2,
+                            )
+                            auto_unit_name_in = gr.Textbox(
+                                label="단원명",
+                                placeholder="예: 광합성",
+                                scale=2,
+                            )
+                        with gr.Row():
+                            auto_target_grade_in = gr.Textbox(
+                                label="대상 학년",
+                                placeholder="예: 초등 6학년",
+                                scale=2,
+                            )
+                            auto_persona_in = gr.Textbox(
+                                label="AI 동료 이름",
+                                placeholder="비워두면 '지후'",
+                                scale=2,
+                            )
+
+                    # -------- STEP 2: 교안/보충자료 + AI 추출 --------
+                    with gr.Accordion(
+                        "📄 2단계 · 교안·참고 자료 (AI 가 대화 중에도 참고)", open=True
+                    ):
+                        gr.Markdown(
+                            "이 자료는 **두 가지 용도**로 쓰입니다:\n"
+                            "1. 학생과 대화하는 중에 AI 가 자료를 참고해 더 정확한 질문을 만듭니다.\n"
+                            "2. 아래 **🤖 AI로 자동 추출** 버튼을 누르면 이 내용에서 "
+                            "학습 목표·루브릭·오개념을 알아서 뽑아줍니다."
                         )
-                        auto_unit_name_in = gr.Textbox(
-                            label="단원명",
-                            placeholder="예: 광합성, 용액과 용질",
-                            scale=2,
-                        )
-                        auto_target_grade_in = gr.Textbox(
-                            label="대상 학년",
-                            placeholder="예: 초등 6학년",
-                            scale=2,
+                        auto_content_in = gr.Textbox(
+                            label="교안·교재·메모",
+                            placeholder=(
+                                "예)\n"
+                                "광합성은 식물이 빛, 물, 이산화탄소를 이용해 포도당과 산소를 "
+                                "만드는 과정이다. 주로 엽록체에서 일어나며, 초등학생들이 자주 "
+                                "가지는 오개념으로는..."
+                            ),
+                            lines=10,
                         )
 
-                    auto_persona_in = gr.Textbox(
-                        label="AI 동료 이름 (비워두면 '지후')",
-                        placeholder="지후",
-                    )
-
-                    auto_content_in = gr.Textbox(
-                        label="📄 교안·교재·메모 (학생 대화 중에도 AI 가 참고)",
-                        placeholder=(
-                            "여기에 수업 계획, 교과서 발췌, 핵심 개념, 관련 자료 등을 붙여넣으세요.\n"
-                            "• AI 가 학생과 대화하는 중에 **보충 자료로 참고** 합니다.\n"
-                            "• 'AI 로 자동 생성' 버튼을 누르면 이 내용에서 학습 목표·루브릭·오개념을 추출합니다.\n"
-                            "  (자동 생성 쓰기 싫으면 아래 미리보기 필드들을 직접 채우고 바로 저장해도 됨)\n"
-                            "\n예)\n"
-                            "광합성은 식물이 빛, 물, 이산화탄소를 이용해 포도당과 산소를 만드는 과정이다. "
-                            "주로 엽록체에서 일어나며, 초등학생들이 자주 가지는 오개념으로는..."
-                        ),
-                        lines=10,
-                    )
-
-                    with gr.Row():
+                        with gr.Row():
+                            auto_web_search_in = gr.Checkbox(
+                                label="🌐 AI 가 대화 중 웹 검색 허용 (느려지고 비용 증가)",
+                                value=False,
+                                info=(
+                                    "켜두면 AI가 관련 예시·비유를 웹에서 찾아 질문에 활용합니다. "
+                                    "Anthropic API 의 web_search 도구 사용 (턴당 최대 2회)."
+                                ),
+                            )
                         auto_generate_btn = gr.Button(
-                            "🤖 AI로 학습목표·루브릭·오개념 자동 추출 (선택)",
+                            "🤖 AI 로 학습목표·루브릭·오개념 자동 추출",
                             variant="secondary",
-                            scale=2,
                         )
+
+                    # -------- STEP 3: 추출·편집 --------
+                    with gr.Accordion(
+                        "✍️ 3단계 · 학습 요소 확인·수정 (AI 가 채워도, 직접 쓰셔도 됨)",
+                        open=True,
+                    ):
+                        auto_preview_subject = gr.Textbox(
+                            label="과목", value="과학", interactive=True
+                        )
+                        auto_preview_goals = gr.Textbox(
+                            label="학습 목표 (한 줄에 하나)",
+                            placeholder=(
+                                "예)\n"
+                                "광합성의 조건 (빛, 물, 이산화탄소)\n"
+                                "광합성의 산물 (포도당, 산소)"
+                            ),
+                            lines=5,
+                            interactive=True,
+                        )
+                        auto_preview_miscons = gr.Textbox(
+                            label="알려진 오개념 (한 줄에 하나)",
+                            placeholder=(
+                                "예)\n"
+                                "식물은 흙에서 양분을 흡수해 자란다\n"
+                                "광합성은 낮에만 일어난다"
+                            ),
+                            lines=5,
+                            interactive=True,
+                        )
+                        auto_preview_ai_miscons = gr.Textbox(
+                            label="AI 가 처음 품고 시작할 오개념 (위 목록에서 1~2개)",
+                            placeholder="예)\n식물은 흙에서 양분을 흡수해 자란다",
+                            lines=3,
+                            interactive=True,
+                        )
+                        with gr.Accordion(
+                            "고급 · 루브릭 JSON (평가 키워드)", open=False
+                        ):
+                            auto_preview_rubric = gr.Textbox(
+                                label="루브릭 (AI 추출 시 자동, 보통 그대로 두세요)",
+                                placeholder=(
+                                    '[\n  {"item_id":"r_light", "description":"빛이 조건",'
+                                    ' "keywords":["빛","햇빛"], "required":true}\n]'
+                                ),
+                                lines=8,
+                                interactive=True,
+                            )
+
+                    # -------- STEP 4: 저장 + 링크 --------
+                    with gr.Accordion("💾 4단계 · 저장하고 학생 링크 받기", open=True):
                         auto_save_btn = gr.Button(
                             "💾 저장 + 학생 링크 만들기",
                             variant="primary",
-                            scale=2,
+                            size="lg",
                         )
-
-                    auto_status = gr.Markdown(
-                        "ℹ️ 본 시스템은 **학번 + 이름** 만 입력하면 로그인되므로, "
-                        "학생 계정을 미리 만들 필요가 없습니다. 저장하면 바로 학생 링크가 생성됩니다."
-                    )
-
-                    gr.Markdown(
-                        "### ✍️ 단원 세부 설정 — 직접 입력하거나 AI 로 채운 뒤 수정"
-                    )
-                    auto_preview_subject = gr.Textbox(
-                        label="과목", value="과학", interactive=True
-                    )
-                    auto_preview_goals = gr.Textbox(
-                        label="학습 목표 (한 줄에 하나)",
-                        placeholder="예)\n광합성의 조건 (빛, 물, 이산화탄소)\n광합성의 산물 (포도당, 산소)",
-                        lines=5,
-                        interactive=True,
-                    )
-                    auto_preview_rubric = gr.Textbox(
-                        label="루브릭 (JSON — AI 생성 시 자동 채워짐. 직접 편집도 가능)",
-                        placeholder='[\n  {"item_id": "r_light", "description": "빛이 조건", "keywords": ["빛", "햇빛"], "required": true}\n]',
-                        lines=8,
-                        interactive=True,
-                    )
-                    auto_preview_miscons = gr.Textbox(
-                        label="알려진 오개념 (한 줄에 하나)",
-                        placeholder="예)\n식물은 흙에서 양분을 흡수해 자란다\n광합성은 낮에만 일어난다",
-                        lines=5,
-                        interactive=True,
-                    )
-                    auto_preview_ai_miscons = gr.Textbox(
-                        label="AI 페르소나가 처음에 품고 있을 오개념 (1~2개, 한 줄에 하나)",
-                        placeholder="예)\n식물은 흙에서 양분을 흡수해 자란다",
-                        lines=3,
-                        interactive=True,
-                    )
-
-                    gr.Markdown("### 🔗 학생에게 배포할 링크")
-                    auto_student_link_out = gr.Textbox(
-                        label="학생 접속 URL (저장 후 여기에 채워짐)",
-                        interactive=False,
-                    )
-                    gr.Markdown(
-                        "💡 학생은 이 링크만 있으면 됩니다.\n"
-                        "- 학번 + 이름 입력으로 로그인 (비밀번호 불필요)\n"
-                        "- 같은 링크로 **여러 학생 동시 접속** 가능\n"
-                        "- 활동 끝나면 학생이 PDF 다운로드 + 교수님 `data\\reports\\` 폴더에도 자동 저장"
-                    )
+                        auto_status = gr.Markdown("")
+                        auto_student_link_out = gr.Textbox(
+                            label="학생 접속 URL (저장 후 채워짐)",
+                            interactive=False,
+                        )
+                        gr.Markdown(
+                            "💡 **학생 접속**\n"
+                            "- 같은 링크로 **여러 명 동시 접속** 가능\n"
+                            "- 학생은 **학번 + 이름** 입력만 하면 시작\n"
+                            "- 활동 끝나면 학생이 PDF 다운로드 + 교수님 `data\\reports\\` 폴더에도 자동 저장"
+                        )
 
                 # ====== Tab 1: 단원 관리 (상세/고급) ======
                 with gr.Tab("📋 단원 관리 (고급)"):
@@ -632,6 +663,7 @@ def build_instructor_app() -> gr.Blocks:
             miscon_text: str,
             ai_miscon_text: str,
             textbook_text: str,
+            web_search_enabled: bool,
         ) -> tuple[str, str]:
             """Save the unit YAML in open login mode (no preset accounts)."""
 
@@ -650,10 +682,11 @@ def build_instructor_app() -> gr.Blocks:
             except Exception as exc:  # noqa: BLE001
                 return f"⚠️ 저장 실패: {exc}", ""
 
-            # Attach textbook content + set open login mode
+            # Attach textbook content + set open login mode + web search flag
             if textbook_text and textbook_text.strip():
                 unit.textbook_content = textbook_text.strip()
             unit.student_login_mode = "open"
+            unit.web_search_enabled = bool(web_search_enabled)
 
             try:
                 save_unit_config(unit, configs_dir=CONFIGS_DIR)
@@ -929,6 +962,7 @@ def build_instructor_app() -> gr.Blocks:
                 auto_preview_miscons,
                 auto_preview_ai_miscons,
                 auto_content_in,
+                auto_web_search_in,
             ],
             outputs=[auto_status, auto_student_link_out],
         )

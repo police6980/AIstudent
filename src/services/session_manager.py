@@ -245,7 +245,11 @@ class SessionManager:
                 content=user_seed,
                 timestamp=__import__("datetime").datetime.utcnow(),
             )
-            return self._claude.generate_response(system_prompt, history=[seed_turn])
+            return self._claude.generate_response(
+                system_prompt,
+                history=[seed_turn],
+                enable_web_search=bool(getattr(unit_config, "web_search_enabled", False)),
+            )
         except ClaudeServiceError as exc:
             logger.error("Opening turn generation failed: %s", exc)
             return (
@@ -274,7 +278,11 @@ class SessionManager:
 
         system_prompt = build_system_prompt(unit_config)
         try:
-            ai_text = self._claude.generate_response(system_prompt, history=history)
+            ai_text = self._claude.generate_response(
+                system_prompt,
+                history=history,
+                enable_web_search=bool(getattr(unit_config, "web_search_enabled", False)),
+            )
         except ClaudeServiceError as exc:
             logger.error("Claude reply failed: %s", exc)
             ai_text = f"(시스템 메시지: AI 응답 생성 실패 — {exc})"

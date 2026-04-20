@@ -111,16 +111,19 @@ class ClaudeService:
         messages: list[dict],
         max_tokens: int,
         temperature: float,
+        enable_web_search: bool = False,
     ):
         """Call client.messages.create with:
         - retry on 529 Overloaded / transient 5xx (exponential backoff)
         - retry without temperature if the model rejects it
         - retry with halved history on 422 context-too-long
+        - retry without web_search tool if the account rejects it
         """
 
         # Work on a local copy so we can halve it if needed.
         current_messages = list(messages)
         use_temperature = True
+        use_web_search = enable_web_search
         last_exc: Exception | None = None
 
         for attempt in range(_TRANSIENT_MAX_RETRIES + 1):
@@ -132,11 +135,31 @@ class ClaudeService:
             }
             if use_temperature:
                 kwargs["temperature"] = temperature
+            if use_web_search:
+                # Anthropic server-side web search tool.
+                # Kept to a tight cap to avoid ballooning latency/cost per turn.
+                kwargs["tools"] = [
+                    {
+                        "type": "web_search_20250305",
+                        "name": "web_search",
+                        "max_uses": 2,
+                    }
+                ]
 
             try:
                 return client.messages.create(**kwargs)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
+
+                msg_str = str(exc).lower()
+                if use_web_search and (
+                    "web_search" in msg_str
+                    or "tool" in msg_str
+                    or "unknown field" in msg_str
+                ):
+                    logger.warning("Web search tool rejected; retrying without it.")
+                    use_web_search = False
+                    continue
 
                 if _is_temperature_rejected(exc) and use_temperature:
                     logger.info("Model rejected temperature; retrying without it.")
@@ -179,12 +202,17 @@ class ClaudeService:
         *,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        enable_web_search: bool = False,
     ) -> str:
         """Call Claude and return the assistant text reply.
 
         `history` includes all prior turns (both student and AI) in chronological order.
         If history is empty, Claude is prompted with a minimal user message
         asking it to greet the student (per the Layer 3 instruction).
+
+        If `enable_web_search=True`, the server-side web_search tool is offered
+        to Claude (limited to 2 searches per turn). Opt in per unit via
+        UnitConfig.web_search_enabled.
         """
 
         client = self._get_client()
@@ -201,7 +229,12 @@ class ClaudeService:
             ]
 
         response = self._call_with_retry(
-            client, system_prompt, messages, max_tokens, temperature
+            client,
+            system_prompt,
+            messages,
+            max_tokens,
+            temperature,
+            enable_web_search=enable_web_search,
         )
 
         # Anthropic returns a list of content blocks; concatenate text blocks.
