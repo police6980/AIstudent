@@ -5,11 +5,16 @@ Routing:
   http://<host>/?unit=xxx     → student UI targeted at unit xxx
   http://<host>/?admin=true   → instructor management UI
 
-Run with: `python -m src.main`
+Run with:
+  python -m src.main                 # localhost only
+  python -m src.main --share         # public gradio.live tunnel (72h)
+  python -m src.main --host 0.0.0.0  # accept connections from same Wi-Fi
+  python -m src.main --port 8080     # override port
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
 
 import gradio as gr
@@ -63,7 +68,30 @@ def build_root_app() -> gr.Blocks:
     return root
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="src.main",
+        description="Launch the preservice-teacher training Gradio app.",
+    )
+    parser.add_argument(
+        "--share",
+        action="store_true",
+        help="Create a public gradio.live tunnel (72h). Use for small pilot tests.",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind address. Use 0.0.0.0 to accept same-Wi-Fi connections. "
+        "Default: 127.0.0.1 (localhost only).",
+    )
+    parser.add_argument(
+        "--port", type=int, default=7860, help="Port number (default: 7860)."
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _parse_args(argv)
     settings = get_settings()
     _configure_logging(settings.log_level)
 
@@ -79,7 +107,7 @@ def main() -> None:
 
     init_db()
     app = build_root_app()
-    app.launch()
+    app.launch(share=args.share, server_name=args.host, server_port=args.port)
 
 
 if __name__ == "__main__":
