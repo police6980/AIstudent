@@ -71,27 +71,53 @@ def _claude_call(
             ) from exc
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    # Opus 4.7 rejects `temperature`. Try with, retry without on that specific error.
+    import random as _random
+    import time as _time
+
+    # Opus 4.7 rejects `temperature`; some calls also hit transient 529.
     kwargs = {
         "model": settings.claude_analysis_model,
         "max_tokens": max_tokens,
         "system": system_prompt,
         "messages": [{"role": "user", "content": user_prompt}],
     }
-    try:
-        response = client.messages.create(temperature=temperature, **kwargs)
-    except Exception as exc:
-        msg = str(exc).lower()
-        if "temperature" in msg and ("deprecated" in msg or "not" in msg):
-            logger.info("Retrying analysis call without temperature (model rejects it).")
-            try:
-                response = client.messages.create(**kwargs)
-            except Exception as exc2:
-                logger.exception("Claude analysis call failed on retry")
-                raise ClaudeServiceError(f"Claude analysis call failed: {exc2}") from exc2
-        else:
+    use_temperature = True
+    last_exc: Exception | None = None
+    _MAX_RETRY = 3
+
+    for attempt in range(_MAX_RETRY + 1):
+        call_kwargs = dict(kwargs)
+        if use_temperature:
+            call_kwargs["temperature"] = temperature
+        try:
+            response = client.messages.create(**call_kwargs)
+            break
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            msg = str(exc).lower()
+
+            if "temperature" in msg and ("deprecated" in msg or "not" in msg) and use_temperature:
+                logger.info("Retrying analysis call without temperature.")
+                use_temperature = False
+                continue
+
+            is_overload = "overload" in msg or "529" in msg
+            if is_overload and attempt < _MAX_RETRY:
+                delay = 1.5 * (2 ** attempt)
+                delay += _random.uniform(0, delay * 0.3)
+                logger.warning(
+                    "Opus overloaded (attempt %d/%d). Sleeping %.1fs.",
+                    attempt + 1, _MAX_RETRY, delay,
+                )
+                _time.sleep(delay)
+                continue
+
             logger.exception("Claude analysis call failed")
             raise ClaudeServiceError(f"Claude analysis call failed: {exc}") from exc
+    else:
+        raise ClaudeServiceError(
+            f"Claude analysis call failed after retries: {last_exc}"
+        ) from last_exc
 
     chunks: list[str] = []
     for block in getattr(response, "content", []) or []:

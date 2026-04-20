@@ -45,7 +45,7 @@ from src.services.scaffolding_engine import build_system_prompt
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIGS_DIR = Path("configs")
-MAX_HISTORY_TURNS = 24
+MAX_HISTORY_TURNS = 16  # lowered from 24 — our system prompt is already ~4k tokens
 
 
 class SessionLockedError(RuntimeError):
