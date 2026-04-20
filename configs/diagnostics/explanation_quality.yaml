@@ -1,0 +1,60 @@
+name: "학생(예비교사) 설명 품질 및 PCK 분석"
+description: "Learning by Teaching 관점에서 교대생의 설명 전략·PCK 징후를 분석한다."
+
+reference_materials:
+  - "default_vygotsky.md"
+
+# PCK(Pedagogical Content Knowledge; Shulman 1986) 관찰 축
+pck_dimensions:
+  learner_awareness: "학습자 수준·선행지식을 고려한 설명 시도"
+  representation: "비유·예시·다중표상 사용"
+  misconception_handling: "AI의 오개념에 대응한 방식 (직접 교정/유도 질문/반례/외면)"
+  question_reframing: "AI의 질문을 재구성·심화한 능력"
+  concept_connection: "여러 개념을 의미 있게 연결한 빈도"
+
+# 설명 품질 궤적 — 세션을 3~5구간으로 나눠 각 구간별 품질 점수
+trajectory_segments: 4
+
+prompt_template: |
+  당신은 Learning by Teaching 연구와 PCK(Pedagogical Content Knowledge) 이론에
+  정통한 분석가입니다. 아래 참고 자료를 기반으로, 교대생(예비교사)의 설명 품질을
+  시간에 따른 궤적 + PCK 관찰 축 두 방향으로 분석하세요.
+
+  【참고 이론 자료】
+  {reference_materials}
+
+  【단원 맥락】
+  단원: {unit_name}
+  학습 목표:
+  {learning_goals}
+
+  【전체 전사 (학생 턴 중심)】
+  {student_turns_with_context}
+
+  【PCK 관찰 축】
+  {pck_dimensions}
+
+  【출력 — 유효한 JSON】
+  {{
+    "explanation_quality_trajectory": [
+      {{"segment": 1, "turn_range": "1-5", "clarity": 0-5, "depth": 0-5, "structure": 0-5, "summary": "..."}},
+      ... (trajectory_segments 개수만큼)
+    ],
+    "pck_observations": {{
+      "learner_awareness": {{"score": 0-5, "evidence": ["원문 인용"]}},
+      "representation": {{"score": 0-5, "evidence_types": ["비유", "예시"], "quality_note": "..."}},
+      "misconception_handling": {{"dominant_strategy": "...", "effectiveness": "..."}},
+      "question_reframing": {{"score": 0-5, "examples": ["..."]}},
+      "concept_connection": {{"explicit_links": 5, "cross_branch_links": 2}}
+    }},
+    "first_vs_last_explanation_comparison": {{
+      "early_excerpt": "세션 초반의 설명 원문",
+      "late_excerpt": "세션 후반의 동일 개념 설명 원문",
+      "observed_change": "무엇이 어떻게 달라졌는지 3~5문장"
+    }},
+    "strengths": ["강점 3개"],
+    "growth_points": ["개선 포인트 3개"],
+    "notable_moments": [
+      {{"turn": 12, "excerpt": "원문", "why_notable": "..."}}
+    ]
+  }}

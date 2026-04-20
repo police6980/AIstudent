@@ -10,6 +10,12 @@ configs/*.yml
 configs/*.accounts.txt
 !configs/example_*.yaml
 !configs/example_*.yml
+!configs/reflection_questions.yaml
+# Diagnostic YAMLs and bundled reference materials ship with the repo.
+!configs/diagnostics/
+!configs/diagnostics/**
+!configs/reference_materials/
+!configs/reference_materials/**
 
 # Python
 __pycache__/

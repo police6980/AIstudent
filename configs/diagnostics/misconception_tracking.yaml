@@ -1,0 +1,62 @@
+name: "오개념 동태(Dynamic) 추적"
+description: "대화 전체 전사에서 오개념의 출현·지속·교정 궤적을 추적한다."
+
+reference_materials:
+  - "default_vygotsky.md"
+  - "default_novak.md"
+
+# 오개념 감지 민감도. 엄격할수록 확실한 것만 잡고, 느슨할수록 의심까지 잡음.
+sensitivity: "medium"   # strict / medium / loose
+
+# 각 오개념의 최종 상태 분류 기준
+final_state_rubric:
+  resolved: "대화 후반에 학생이 정확한 설명으로 완전히 대체함"
+  partially_resolved: "일부 교정되었으나 여전히 부정확한 측면 남음"
+  unresolved: "드러났으나 교정되지 않음"
+  newly_emerged: "세션 시작 시 없었으나 대화 중 새로 나타남"
+
+prompt_template: |
+  당신은 Vygotsky ZPD 관점과 개념 변화(conceptual change) 연구에 정통한 분석가입니다.
+  아래 참고 자료를 바탕으로, 교대생(예비교사)과 AI 동료의 대화에서
+  오개념의 출현·지속·교정 궤적을 추적하세요.
+
+  【참고 이론 자료】
+  {reference_materials}
+
+  【단원 맥락】
+  단원: {unit_name}
+  학습 목표:
+  {learning_goals}
+  알려진 오개념(교수자 명시):
+  {common_misconceptions}
+  AI가 초기에 품고 시작한 오개념:
+  {initial_ai_misconceptions}
+  학생 초기 개념도에서 감지된 오개념:
+  {initial_student_misconceptions}
+
+  【전체 대화 전사 (턴 번호 포함)】
+  {transcript_with_indices}
+
+  【분석 민감도】
+  {sensitivity}
+
+  【출력 — 유효한 JSON】
+  {{
+    "trajectories": [
+      {{
+        "misconception": "오개념 본문",
+        "source": "ai_initial | student_initial | student_emerged | ai_emerged",
+        "first_appearance_turn": 3,
+        "key_events": [
+          {{"turn": 3, "speaker": "ai", "event": "오개념 드러남", "excerpt": "원문 인용"}},
+          {{"turn": 5, "speaker": "student", "event": "1차 대응", "excerpt": "..."}},
+          {{"turn": 9, "speaker": "ai", "event": "재질문", "excerpt": "..."}},
+          {{"turn": 12, "speaker": "student", "event": "교정 시도", "excerpt": "..."}}
+        ],
+        "final_state": "resolved | partially_resolved | unresolved | newly_emerged",
+        "final_state_justification": "왜 이 상태인지 1~2문장",
+        "student_handling_strategy": "학생이 이 오개념을 다룬 방식 (직접 반박 / 유도 질문 / 반례 제시 / 외면 등)"
+      }}
+    ],
+    "overall_conceptual_change_summary": "세션 전체에서의 개념 변화 흐름 3~5문장"
+  }}

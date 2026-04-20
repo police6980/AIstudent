@@ -1,0 +1,79 @@
+name: "초기 개념도 학생 수준 진단"
+description: "학생이 작성한 초기 개념도를 Vygotsky ZPD·Novak 5요소 관점으로 분석한다."
+
+# 이 진단에 사용할 참고 이론 자료(파일명; configs/reference_materials/ 하위 기준)
+reference_materials:
+  - "default_vygotsky.md"
+  - "default_novak.md"
+
+# Novak & Gowin (1984) 채점 가중치. 교수자가 단원 특성에 맞게 조정 가능.
+scoring_weights:
+  proposition: 1
+  hierarchy_level: 5
+  cross_link: 10
+  example: 1
+  misconception_penalty: -5
+  isolated_concept_penalty: -2
+
+# 학생 수준 판정 루브릭 — LLM이 이 기준으로 분류함
+level_rubric:
+  novice:
+    description: "개념 수 5개 미만 또는 교차연결 없음, 위계 2 이하, 핵심 개념 누락"
+    zpd_note: "상위 개념을 언어화하는 것부터 지원 필요"
+  developing:
+    description: "개념 6~14개, 교차연결 1~2개, 일부 오개념 포함"
+    zpd_note: "교차연결 구성과 오개념 교정이 다음 ZPD"
+  proficient:
+    description: "개념 15개 이상, 교차연결 3개 이상, 오개념 없음 또는 1개"
+    zpd_note: "미묘한 구분·경계 사례·응용으로 ZPD 확장"
+  advanced:
+    description: "풍부한 교차연결(4개 이상), 다양한 예시, 오개념 없음, 깊은 위계"
+    zpd_note: "대안 모델·이론적 한계 탐색 가능"
+
+# Claude에 보낼 프롬프트 템플릿. {변수} 는 런타임에 치환.
+prompt_template: |
+  당신은 Vygotsky의 근접발달영역(ZPD) 이론과 Novak의 개념도 이론에 정통한
+  과학교육 연구 분석가입니다. 아래 자료를 참고해 학생의 초기 개념도를
+  진단하세요.
+
+  【참고 이론 자료】
+  {reference_materials}
+
+  【단원 맥락】
+  단원: {unit_name}
+  학습 목표:
+  {learning_goals}
+  알려진 오개념:
+  {common_misconceptions}
+
+  【학생이 작성한 초기 개념도】
+  개념 목록({concept_count}개):
+  {concepts}
+
+  명제({proposition_count}개):
+  {propositions}
+
+  교차연결({cross_link_count}개):
+  {cross_links}
+
+  구체 예시({example_count}개):
+  {examples}
+
+  자동 추정된 최대 위계 수준: {max_hierarchy_level}
+  고립 개념(명제 없음): {isolated_concepts}
+
+  【평가 루브릭】
+  {level_rubric}
+
+  【출력 형식 — 반드시 유효한 JSON】
+  {{
+    "level": "novice|developing|proficient|advanced",
+    "level_justification": "왜 이 수준인지 2~3문장",
+    "detected_misconceptions": [
+      {{"misconception": "오개념 서술", "evidence_in_map": "어느 명제/라벨에서 드러났는지"}}
+    ],
+    "missing_core_concepts": ["단원 핵심인데 빠진 개념들"],
+    "strong_points": ["강점 2~3개"],
+    "zpd_targets": ["AI와 대화에서 학생이 다룰 수 있을 것으로 예상되는 ZPD 학습 목표 3~5개"],
+    "recommended_first_question": "AI가 학생에게 던질 첫 질문(핵심 개념을 유출하지 않으면서 학생의 설명을 유도)"
+  }}

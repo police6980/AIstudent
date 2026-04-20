@@ -1,0 +1,63 @@
+name: "AI 비계 제공 품질 평가"
+description: "Vygotsky 6원칙 및 Wood et al.(1976) 비계 기능 관점에서 AI의 각 턴이 적절한 비계였는지 평가."
+
+reference_materials:
+  - "default_vygotsky.md"
+
+# Vygotsky 6원칙 체크리스트. 각 턴에 대해 LLM이 판정.
+principle_checklist:
+  p1_no_answer_disclosure:
+    label: "답 선발설 금지"
+    description: "학생이 도달해야 할 개념·결론을 AI가 먼저 말하지 않았는가"
+  p2_learner_agency:
+    label: "학습자 주도성"
+    description: "학생이 다음 스텝을 결정할 여지를 남겼는가"
+  p3_fading:
+    label: "기여 감소"
+    description: "세션이 진행될수록 AI의 지원이 줄어들었는가 (세션 전체 평가)"
+  p4_mediating_thought:
+    label: "사고 방식 매개"
+    description: "내용이 아닌 '어떻게 생각할지'를 제시했는가"
+  p5_metacognitive_trigger:
+    label: "메타인지 자극"
+    description: "학생이 자기 설명을 되돌아보게 만드는 요소가 있었는가"
+  p6_affective_safety:
+    label: "정서적 안전"
+    description: "막힘을 실패가 아닌 학습 기회로 프레이밍했는가"
+
+prompt_template: |
+  당신은 Vygotsky 비계 이론에 정통한 분석가입니다. 아래 참고 자료를 기준으로,
+  AI가 각 턴에서 제공한 비계의 품질을 평가하세요.
+
+  【참고 이론 자료】
+  {reference_materials}
+
+  【Vygotsky 6원칙 체크리스트】
+  {principle_checklist}
+
+  【전체 전사 (AI 턴만 표시)】
+  {ai_turns_with_context}
+
+  【출력 — 유효한 JSON】
+  {{
+    "per_turn_assessment": [
+      {{
+        "turn": 1,
+        "ai_utterance": "원문",
+        "principles_satisfied": ["p1", "p2", "p5"],
+        "principles_violated": [],
+        "scaffolding_function": "Wood et al. 6기능 중 어느 것에 해당 (recruitment/reduction/direction/marking/frustration/demonstration)",
+        "zpd_fit": "below_zpd | within_zpd | above_zpd",
+        "quality": "excellent | good | acceptable | problematic",
+        "quality_note": "왜 그런지 1~2문장"
+      }}
+    ],
+    "fading_pattern": "세션 전반에 걸친 지원 감소 여부 (clear_fading / partial_fading / no_fading / increasing)",
+    "overall_scaffolding_quality": "excellent | good | acceptable | problematic",
+    "top_3_strong_scaffolding_moments": [
+      {{"turn": 5, "reason": "..."}}
+    ],
+    "top_3_problematic_moments": [
+      {{"turn": 8, "reason": "..."}}
+    ]
+  }}

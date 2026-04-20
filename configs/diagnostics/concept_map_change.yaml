@@ -1,0 +1,66 @@
+name: "전·후 개념도 변화 분석"
+description: "초기 개념도와 사후 개념도를 비교해 학습에 따른 개념 변화 양상을 분석한다."
+
+reference_materials:
+  - "default_novak.md"
+
+# Novak의 개념 변화 6유형 (정교화/추가/재구조화/통합/교정/지속)
+change_types:
+  addition: "새 개념 추가"
+  elaboration: "기존 개념에 하위 개념·예시 덧붙임"
+  restructuring: "위계 구조 자체가 바뀜"
+  integration: "새 교차연결 생성 — 가장 중요한 통합 지표"
+  correction: "부정확하던 명제가 정확해짐"
+  persistence: "교정되지 않은 오개념이 그대로 남음"
+
+prompt_template: |
+  당신은 Novak 개념도 이론에 정통한 개념 변화(conceptual change) 연구자입니다.
+  아래 참고 자료를 바탕으로, 학생의 초기 개념도와 사후 개념도를 비교하여
+  학습에 따른 개념 변화 양상을 분석하세요.
+
+  【참고 이론 자료】
+  {reference_materials}
+
+  【단원 맥락】
+  단원: {unit_name}
+  학습 목표:
+  {learning_goals}
+
+  【초기 개념도】
+  개념: {pre_concepts}
+  명제: {pre_propositions}
+  교차연결: {pre_cross_links}
+  예시: {pre_examples}
+  Novak 점수: {pre_score} (명제 {pre_prop_count} + 위계 {pre_levels} + 교차연결 {pre_cross_count} + 예시 {pre_ex_count})
+
+  【사후 개념도】
+  개념: {post_concepts}
+  명제: {post_propositions}
+  교차연결: {post_cross_links}
+  예시: {post_examples}
+  Novak 점수: {post_score} (명제 {post_prop_count} + 위계 {post_levels} + 교차연결 {post_cross_count} + 예시 {post_ex_count})
+
+  【변화 유형】
+  {change_types}
+
+  【세션 중 다뤄진 오개념 (참고)】
+  {misconceptions_addressed}
+
+  【출력 — 유효한 JSON】
+  {{
+    "score_change": {{"pre": 0, "post": 0, "delta": 0}},
+    "changes_by_type": {{
+      "addition": [{{"concept": "새 개념명", "note": "..."}}],
+      "elaboration": [{{"concept": "...", "what_was_added": "..."}}],
+      "restructuring": [{{"description": "위계가 어떻게 달라졌는지"}}],
+      "integration": [{{"new_cross_link": "from -[linking]-> to", "significance": "왜 의미있는 통합인지"}}],
+      "correction": [{{"before": "부정확 명제", "after": "정확 명제", "related_misconception": "..."}}],
+      "persistence": [{{"misconception": "...", "evidence_in_post_map": "..."}}]
+    }},
+    "key_emerging_cross_links": [
+      {{"from": "...", "linking": "...", "to": "...", "why_notable": "Novak 관점에서 왜 중요한 통합인지"}}
+    ],
+    "hierarchy_change_summary": "위계 깊이·폭 변화 요약",
+    "overall_learning_evidence": "이 학생이 학습했음을 증거로 보여주는 핵심 변화 3가지",
+    "concerns": "여전히 우려되는 부분 (누락/오개념 지속 등)"
+  }}
