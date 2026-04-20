@@ -271,8 +271,16 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
                 mgr.load_unit(code)
             except AuthenticationError as exc:
                 return f"⚠️ {exc}", ""
+
+            ai_status = ""
+            if not mgr.ai_is_ready():
+                ai_status = (
+                    "\n\n⚠️ **지금 AI 가 응답할 준비가 되지 않았어요.**\n"
+                    "교수자가 관리자 페이지에서 API 키 설정을 마칠 때까지 잠시 기다려주세요. "
+                    "그래도 계속 로그인해서 개념도는 작성할 수 있어요 — AI 가 켜지면 대화가 이어집니다."
+                )
             return (
-                f"**단원 코드:** `{code}`\n\n학번과 이름을 입력하세요.",
+                f"**단원 코드:** `{code}`\n\n학번과 이름을 입력하세요." + ai_status,
                 code,
             )
 

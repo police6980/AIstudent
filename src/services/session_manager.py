@@ -100,6 +100,18 @@ class SessionManager:
         except UnitConfigError as exc:
             raise AuthenticationError(f"단원을 찾을 수 없어요: {exc}") from exc
 
+    def ai_is_ready(self) -> bool:
+        """True when an Anthropic API key is currently available.
+
+        Used as a preflight check by the student UI so we can warn the user
+        before they invest time drawing a concept map and then hit a
+        runtime error on the first AI call.
+        """
+
+        from src.config.settings import get_settings
+
+        return bool((get_settings().anthropic_api_key or "").strip())
+
     def login(
         self,
         unit_code: str,
@@ -252,9 +264,18 @@ class SessionManager:
             )
         except ClaudeServiceError as exc:
             logger.error("Opening turn generation failed: %s", exc)
+            if "API_KEY" in str(exc) or "api_key" in str(exc).lower():
+                return (
+                    "⚠️ (AI 가 응답할 수 없어요)\n\n"
+                    "교수자가 아직 Anthropic API 키를 입력하지 않았거나, "
+                    "입력된 키가 유효하지 않아요.\n"
+                    "교수자에게 **관리자 페이지 → 🔑 API 키 설정** 에서 "
+                    "키를 다시 확인해달라고 알려주세요.\n"
+                    "키가 설정되면 **같은 링크로 재접속** 해서 이어서 진행할 수 있어요."
+                )
             return (
-                "안녕, 오늘 단원 같이 정리해보기로 했지? "
-                "네가 제출한 개념도 잘 봤어. 어디서부터 설명해줄래?"
+                "⚠️ AI 응답 생성에 실패했어요. 잠시 후 다시 시도하거나 교수자에게 알려주세요.\n"
+                f"(시스템 메시지: {exc})"
             )
 
     # -- DIALOGUE --------------------------------------------------------
