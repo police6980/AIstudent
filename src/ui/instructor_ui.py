@@ -38,6 +38,7 @@ from src.services.instructor_service import (
     admin_enabled,
     delete_reference,
     delete_unit,
+    get_api_key_status,
     get_report_paths_for_session,
     list_sessions,
     list_units,
@@ -45,6 +46,7 @@ from src.services.instructor_service import (
     reset_session_to_in_progress,
     save_reference_upload,
     save_unit_config,
+    set_runtime_api_key,
     verify_instructor_password,
 )
 
@@ -150,6 +152,23 @@ def build_instructor_app() -> gr.Blocks:
         # ---------- Main panel (hidden until authed) ----------
         with gr.Group(visible=False) as main_panel:
             gr.Markdown("로그인 성공. 아래 탭에서 관리 작업을 진행하세요.")
+
+            # ====== API 키 상태 + 런타임 업데이트 ======
+            with gr.Accordion("🔑 API 키 설정 (이 세션에만 유효)", open=False):
+                gr.Markdown(
+                    "`ANTHROPIC_API_KEY` 가 비어있거나 바꾸고 싶을 때 여기서 입력할 수 있습니다.\n"
+                    "- **저장되지 않습니다** — 앱을 껐다 켜면 `.env` 의 값으로 돌아갑니다.\n"
+                    "- 유출 위험을 줄이려면 `.env` 에 영구 저장하는 편이 안전합니다."
+                )
+                api_key_status = gr.Markdown("")
+                with gr.Row():
+                    api_key_in = gr.Textbox(
+                        label="새 API 키 (sk-ant-api03-...)",
+                        type="password",
+                        scale=4,
+                    )
+                    api_key_apply_btn = gr.Button("적용", variant="primary", scale=1)
+                api_key_msg = gr.Markdown("")
 
             with gr.Tabs():
                 # ====== Tab 1: 단원 관리 ======
@@ -337,14 +356,35 @@ def build_instructor_app() -> gr.Blocks:
 
         # ================ handlers ================
 
-        def on_login(pw: str) -> tuple[Any, Any, Any]:
+        def _api_key_status_text() -> str:
+            ok, preview = get_api_key_status()
+            if ok:
+                return f"✅ 현재 사용 중: `{preview}`"
+            return "⚠️ **API 키가 설정되지 않았어요.** AI 호출이 실패합니다. 아래에서 입력해주세요."
+
+        def on_login(pw: str) -> tuple[Any, Any, Any, Any]:
             if not admin_enabled():
-                return False, "⚠️ 비활성화됨. .env 에 INSTRUCTOR_PASSWORD 설정 필요.", gr.update(
-                    visible=False
+                return (
+                    False,
+                    "⚠️ 비활성화됨. .env 에 INSTRUCTOR_PASSWORD 설정 필요.",
+                    gr.update(visible=False),
+                    _api_key_status_text(),
                 )
             if not verify_instructor_password(pw):
-                return False, "⚠️ 비밀번호가 올바르지 않아요.", gr.update(visible=False)
-            return True, "", gr.update(visible=True)
+                return (
+                    False,
+                    "⚠️ 비밀번호가 올바르지 않아요.",
+                    gr.update(visible=False),
+                    _api_key_status_text(),
+                )
+            return True, "", gr.update(visible=True), _api_key_status_text()
+
+        def on_apply_api_key(new_key: str) -> tuple[str, str, str]:
+            ok, message = set_runtime_api_key(new_key)
+            status = _api_key_status_text()
+            if ok:
+                return status, f"✅ {message}", ""  # clear the input
+            return status, f"⚠️ {message}", new_key
 
         # -- Tab 1 handlers --
 
@@ -559,8 +599,16 @@ def build_instructor_app() -> gr.Blocks:
 
         if admin_enabled():
             login_btn.click(
-                on_login, inputs=[pw_in], outputs=[authed, login_msg, main_panel]
+                on_login,
+                inputs=[pw_in],
+                outputs=[authed, login_msg, main_panel, api_key_status],
             )
+
+        api_key_apply_btn.click(
+            on_apply_api_key,
+            inputs=[api_key_in],
+            outputs=[api_key_status, api_key_msg, api_key_in],
+        )
 
         # Tab 1
         refresh_units_btn.click(on_refresh_units, inputs=None, outputs=units_df)

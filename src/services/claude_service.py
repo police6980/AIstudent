@@ -56,16 +56,41 @@ def _turns_to_messages(turns: list[Turn]) -> list[dict]:
     return messages
 
 
+# Weak registry of live ClaudeService instances so we can clear their
+# cached Anthropic clients when the instructor updates the API key at
+# runtime from the admin UI.
+import weakref as _weakref
+
+_LIVE_SERVICES: "_weakref.WeakSet[ClaudeService]" = _weakref.WeakSet()
+
+
+def reset_all_claude_clients() -> None:
+    """Drop every live ClaudeService's cached client, forcing re-auth on next call."""
+
+    for svc in list(_LIVE_SERVICES):
+        svc._client = None  # noqa: SLF001
+        svc._settings = None  # noqa: SLF001
+
+
 class ClaudeService:
     """Wrapper responsible for calling Claude with a system prompt + history."""
 
     def __init__(self, settings: Optional[Settings] = None, client=None):
         self._settings = settings or get_settings()
         self._client = client  # lazy init — see _get_client()
+        _LIVE_SERVICES.add(self)
+
+    def _fresh_settings(self) -> Settings:
+        """Always re-read settings so runtime API key updates take effect."""
+
+        self._settings = get_settings()
+        return self._settings
 
     def _get_client(self):
         if self._client is not None:
             return self._client
+        # Re-check settings so a runtime-provided API key is picked up.
+        self._fresh_settings()
         if not self._settings.anthropic_api_key:
             raise ClaudeServiceError(
                 "ANTHROPIC_API_KEY is not set. Configure it in .env before calling Claude."

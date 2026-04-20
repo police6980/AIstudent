@@ -6,6 +6,7 @@ Used by the instructor UI (?admin=true). Student flows never call this.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,6 +50,56 @@ def admin_enabled() -> bool:
 
     configured = get_settings().instructor_password
     return bool(configured and configured.strip())
+
+
+def get_api_key_status() -> tuple[bool, str]:
+    """Return (is_set, masked_preview) so the admin page can show status."""
+
+    key = get_settings().anthropic_api_key or ""
+    if not key:
+        return False, ""
+    # Mask: show first 10 + last 4 chars
+    if len(key) > 20:
+        preview = f"{key[:10]}...{key[-4:]}"
+    else:
+        preview = f"{key[:4]}...{key[-2:]}"
+    return True, preview
+
+
+def set_runtime_api_key(new_key: str) -> tuple[bool, str]:
+    """Update ANTHROPIC_API_KEY at runtime (not persisted to disk).
+
+    Lives only until the next app restart. Clears cached settings so
+    subsequent Claude calls pick up the new key immediately.
+    """
+
+    new_key = (new_key or "").strip()
+    if not new_key:
+        return False, "API key cannot be empty."
+    if not new_key.startswith("sk-"):
+        return False, (
+            "Doesn't look like an Anthropic API key "
+            "(expected to start with 'sk-')."
+        )
+
+    os.environ["ANTHROPIC_API_KEY"] = new_key
+    # Invalidate the settings cache so get_settings() re-reads os.environ.
+    try:
+        get_settings.cache_clear()  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+
+    # Also reset any cached Anthropic client inside a running SessionManager's
+    # ClaudeService — best-effort import so unit tests don't require the
+    # whole stack.
+    try:
+        from src.services.claude_service import reset_all_claude_clients
+
+        reset_all_claude_clients()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not reset cached Claude clients: %s", exc)
+
+    return True, "API key updated for this session (will reset on app restart)."
 
 
 # ---- Unit CRUD ---------------------------------------------------------
