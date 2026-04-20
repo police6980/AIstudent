@@ -60,4 +60,8 @@ with gr.Blocks(title="예비교사 과학 설명 훈련") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch()
+    # show_api=False skips the /api schema endpoint, which gradio_client
+    # tries to build from our Blocks and choked on when boolean
+    # additionalProperties appeared in Pydantic-derived schemas. We don't
+    # expose a JSON API to students, so disabling it is safe.
+    demo.launch(show_api=False)
