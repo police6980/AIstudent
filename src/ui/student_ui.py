@@ -28,6 +28,10 @@ from src.services.session_manager import (
     SessionManager,
     StepViolationError,
 )
+from src.ui.concept_map_editor import (
+    build_visual_concept_map_editor,
+    parse_visual_concept_map,
+)
 from src.ui.concept_map_ui import (
     ConceptMapParseError,
     build_concept_map_from_inputs,
@@ -115,17 +119,110 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
         font=[gr.themes.GoogleFont("Nanum Gothic"), "system-ui", "sans-serif"],
     )
 
-    # Minimal extra CSS — softer card look, better readability.
+    # Heavy custom CSS — makes the app feel less "gradio demo" and more like
+    # a real tool. Typography + soft cards + consistent spacing + visual
+    # editor styling.
     _css = """
-    .gradio-container { max-width: 1080px !important; margin: 0 auto !important; }
-    .progress-dots {
-        display: flex; gap: 6px; align-items: center; font-size: 0.92rem;
-        padding: 10px 14px; margin: 10px 0 18px 0;
-        background: linear-gradient(90deg, #EEF2FF, #F8FAFC);
-        border-radius: 12px; border: 1px solid #E2E8F0;
+    :root {
+      --cm-primary: #4f46e5;
+      --cm-primary-dark: #3730a3;
+      --cm-surface: #ffffff;
+      --cm-muted: #64748b;
+      --cm-border: #e2e8f0;
+      --cm-tint: #eef2ff;
     }
-    .progress-dots b { color: #3730A3; }
+    .gradio-container {
+      max-width: 1080px !important;
+      margin: 0 auto !important;
+      padding: 14px 18px 32px !important;
+      font-family: "Nanum Gothic", "Pretendard", "Noto Sans KR",
+                   system-ui, -apple-system, sans-serif !important;
+    }
+    .gradio-container h1,
+    .gradio-container h2,
+    .gradio-container h3 { letter-spacing: -0.01em; }
+    .progress-dots {
+      display: flex; gap: 10px; align-items: center;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      padding: 12px 16px; margin: 10px 0 20px 0;
+      background: linear-gradient(90deg, #EEF2FF 0%, #F8FAFC 100%);
+      border-radius: 14px; border: 1px solid var(--cm-border);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .progress-dots b { color: var(--cm-primary-dark); }
     footer { display: none !important; }
+    .gr-block.gr-box, .block { border-radius: 14px !important; }
+    .gr-button {
+      border-radius: 10px !important;
+      font-weight: 600 !important;
+      letter-spacing: -0.005em;
+    }
+    .gr-button.primary {
+      box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+    }
+    .gr-textbox textarea,
+    .gr-textbox input {
+      font-family: "Nanum Gothic", "Pretendard", "Noto Sans KR",
+                   system-ui, sans-serif !important;
+      font-size: 0.95rem !important;
+      line-height: 1.55 !important;
+    }
+
+    /* Visual concept-map editor styling */
+    .cm-wrapper {
+      border: 1px solid var(--cm-border);
+      border-radius: 14px;
+      background: var(--cm-surface);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    }
+    .cm-toolbar {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      padding: 10px 14px;
+      background: linear-gradient(180deg, #F8FAFC, #F1F5F9);
+      border-bottom: 1px solid var(--cm-border);
+      align-items: center;
+    }
+    .cm-btn {
+      background: var(--cm-primary);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: transform 0.05s, box-shadow 0.15s, background 0.15s;
+      box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
+    }
+    .cm-btn:hover { background: var(--cm-primary-dark); }
+    .cm-btn:active { transform: translateY(1px); }
+    .cm-btn-muted {
+      background: #f1f5f9; color: #475569; box-shadow: none;
+    }
+    .cm-btn-muted:hover { background: #e2e8f0; }
+    .cm-hint {
+      font-size: 0.82rem; color: var(--cm-muted);
+      margin-left: auto;
+    }
+    .cm-canvas-wrap {
+      background:
+        radial-gradient(circle, #e2e8f0 1px, transparent 1.5px) 0 0 / 22px 22px,
+        #fafafa;
+      position: relative;
+    }
+    .cm-svg { display: block; cursor: crosshair; }
+    .cm-node { cursor: move; }
+    .cm-node:hover rect { stroke-width: 2; }
+    .cm-edge:hover { stroke-width: 3; }
+    .cm-stats {
+      padding: 8px 14px;
+      font-size: 0.84rem;
+      color: var(--cm-muted);
+      border-top: 1px solid var(--cm-border);
+      background: #f8fafc;
+    }
     """
 
     with gr.Blocks(title="예비교사 과학 설명 훈련", theme=_student_theme, css=_css) as app:
@@ -176,20 +273,16 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
         # Pane 2: PRE_MAP
         # =========================================================================
         with gr.Group(visible=False) as pre_map_pane:
-            gr.Markdown("### 2단계. 초기 개념도 작성")
-            pre_map_block = build_concept_map_input_block(
-                title="🗺️ 오늘 단원에 대한 현재 내 개념도",
-                description_md=(
-                    "오늘 공부한 단원에 대해 **지금 머릿속에 있는 개념들**을 구조로 옮겨보세요.\n"
-                    "- **개념**은 명사로 (예: 광합성, 빛, 엽록체)\n"
-                    "- **명제**는 두 개념을 이을 때 `시작 | 연결어 | 끝` 형식 "
-                    "(예: `광합성 | 의 조건은 | 빛`)\n"
-                    "- **교차연결**은 서로 다른 가지를 잇는 특별한 연결\n"
-                    "- **예시**는 개념을 뒷받침하는 구체 사례\n\n"
-                    "막막하다면 먼저 개념만 쭉 적고, 명제는 그다음에 채워도 됩니다."
-                ),
-                submit_label="제출 → 대화 시작",
-                state_prefix="pre",
+            gr.Markdown(
+                "### 2단계 · 🗺️ 초기 개념도 그리기\n"
+                "> 마우스로 **개념**을 놓고 **선**을 그어 연결하세요. 구조만 잡으면 됩니다."
+            )
+            pre_map_editor = build_visual_concept_map_editor(prefix="pre_map")
+            pre_map_warnings = gr.Markdown("")
+            pre_map_submit = gr.Button(
+                "✅ 개념도 제출 → AI 대화 시작",
+                variant="primary",
+                size="lg",
             )
 
         # =========================================================================
@@ -261,19 +354,17 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
         # Pane 4: POST_MAP
         # =========================================================================
         with gr.Group(visible=False) as post_map_pane:
-            gr.Markdown("### 4단계. 사후 개념도 작성")
             gr.Markdown(
-                "대화를 통해 이해가 달라졌거나 정리된 부분을 반영해서 **다시 개념도를** 작성해주세요. "
-                "초기 개념도는 비교를 위해 의도적으로 보여드리지 않습니다."
+                "### 4단계 · 🗺️ 대화 후 개념도 다시 그리기\n"
+                "> 대화를 통해 바뀐 이해를 반영해 다시 그려주세요. 초기 개념도는 "
+                "**비교 편향을 줄이기 위해** 보여드리지 않습니다."
             )
-            post_map_block = build_concept_map_input_block(
-                title="🗺️ 대화 후의 내 개념도",
-                description_md=(
-                    "지금 머릿속에 있는 개념들을 다시 정리해서 써주세요. "
-                    "초기 개념도에서 추가된 것, 바뀐 것, 새로 생긴 연결을 반영하면 좋아요."
-                ),
-                submit_label="제출 → 성찰 질문으로",
-                state_prefix="post",
+            post_map_editor = build_visual_concept_map_editor(prefix="post_map")
+            post_map_warnings = gr.Markdown("")
+            post_map_submit = gr.Button(
+                "✅ 사후 개념도 제출 → 성찰 질문으로",
+                variant="primary",
+                size="lg",
             )
 
         # =========================================================================
@@ -410,22 +501,17 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
 
         def on_submit_pre_map(
             session_id: str | None,
-            concepts_text: str,
-            props_text: str,
-            cross_text: str,
-            examples_text: str,
+            state_json: str,
         ) -> tuple[Any, ...]:
             if not session_id:
                 return (*_show("login"), "⚠️ 로그인 먼저 하세요.", "", [])
             try:
-                parsed = build_concept_map_from_inputs(
-                    concepts_text, props_text, cross_text, examples_text
-                )
-            except ConceptMapParseError as exc:
+                cmap = parse_visual_concept_map(state_json)
+            except ValueError as exc:
                 return (*_show("pre_map"), f"⚠️ {exc}", "", [])
 
             try:
-                result = mgr.submit_pre_concept_map(session_id, parsed.concept_map)
+                result = mgr.submit_pre_concept_map(session_id, cmap)
             except (SessionLockedError, StepViolationError, LookupError) as exc:
                 return (*_show("pre_map"), f"⚠️ {exc}", "", [])
 
@@ -497,21 +583,16 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
 
         def on_submit_post_map(
             session_id: str | None,
-            concepts_text: str,
-            props_text: str,
-            cross_text: str,
-            examples_text: str,
+            state_json: str,
         ) -> tuple[Any, ...]:
             if not session_id:
                 return (*_show("login"), "")
             try:
-                parsed = build_concept_map_from_inputs(
-                    concepts_text, props_text, cross_text, examples_text
-                )
-            except ConceptMapParseError as exc:
+                cmap = parse_visual_concept_map(state_json)
+            except ValueError as exc:
                 return (*_show("post_map"), f"⚠️ {exc}")
             try:
-                mgr.submit_post_concept_map(session_id, parsed.concept_map)
+                mgr.submit_post_concept_map(session_id, cmap)
             except (SessionLockedError, StepViolationError, LookupError) as exc:
                 return (*_show("post_map"), f"⚠️ {exc}")
             return (*_show("reflection"), "")
@@ -567,15 +648,9 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
             ],
         )
 
-        pre_map_block["submit_btn"].click(
+        pre_map_submit.click(
             on_submit_pre_map,
-            inputs=[
-                session_state,
-                pre_map_block["concepts_in"],
-                pre_map_block["propositions_in"],
-                pre_map_block["cross_links_in"],
-                pre_map_block["examples_in"],
-            ],
+            inputs=[session_state, pre_map_editor["state_in"]],
             outputs=[
                 login_pane,
                 pre_map_pane,
@@ -583,7 +658,7 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
                 post_map_pane,
                 reflection_pane,
                 completed_pane,
-                pre_map_block["warnings_md"],
+                pre_map_warnings,
                 dialogue_status,
                 dialogue_chatbot,
             ],
@@ -630,15 +705,9 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
             ],
         )
 
-        post_map_block["submit_btn"].click(
+        post_map_submit.click(
             on_submit_post_map,
-            inputs=[
-                session_state,
-                post_map_block["concepts_in"],
-                post_map_block["propositions_in"],
-                post_map_block["cross_links_in"],
-                post_map_block["examples_in"],
-            ],
+            inputs=[session_state, post_map_editor["state_in"]],
             outputs=[
                 login_pane,
                 pre_map_pane,
@@ -646,7 +715,7 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
                 post_map_pane,
                 reflection_pane,
                 completed_pane,
-                post_map_block["warnings_md"],
+                post_map_warnings,
             ],
         )
 

@@ -147,7 +147,22 @@ def build_instructor_app() -> gr.Blocks:
         font=[gr.themes.GoogleFont("Nanum Gothic"), "system-ui", "sans-serif"],
     )
 
-    with gr.Blocks(title="교수자 관리 페이지", theme=_theme) as app:
+    _admin_css = """
+    .gradio-container {
+      max-width: 1180px !important;
+      margin: 0 auto !important;
+      padding: 14px 18px 32px !important;
+      font-family: "Nanum Gothic", "Pretendard", "Noto Sans KR",
+                   system-ui, sans-serif !important;
+    }
+    footer { display: none !important; }
+    .gr-button { border-radius: 10px !important; font-weight: 600 !important; }
+    .gr-button.primary { box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3); }
+    .gradio-container h1 { letter-spacing: -0.01em; }
+    .gr-block.gr-box, .block { border-radius: 14px !important; }
+    """
+
+    with gr.Blocks(title="교수자 관리 페이지", theme=_theme, css=_admin_css) as app:
         gr.Markdown(
             "# 🧑‍🏫 교수자 관리 페이지\n"
             "*단원 설정·학생 링크 생성·세션 분석이 여기서 이루어져요.*"
