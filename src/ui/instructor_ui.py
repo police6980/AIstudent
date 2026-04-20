@@ -34,6 +34,7 @@ from src.services.diagnostics import (
     save_reflection_questions,
 )
 from src.services.diagnostics.diagnostic_config import save_diagnostic
+from src.services.claude_service import ClaudeServiceError
 from src.services.instructor_service import (
     admin_enabled,
     delete_reference,
@@ -48,6 +49,10 @@ from src.services.instructor_service import (
     save_unit_config,
     set_runtime_api_key,
     verify_instructor_password,
+)
+from src.services.unit_auto_generator import (
+    auto_generate_unit_from_text,
+    fill_student_accounts,
 )
 
 logger = logging.getLogger(__name__)
@@ -171,8 +176,107 @@ def build_instructor_app() -> gr.Blocks:
                 api_key_msg = gr.Markdown("")
 
             with gr.Tabs():
-                # ====== Tab 1: 단원 관리 ======
-                with gr.Tab("📋 단원 관리"):
+                # ====== Tab 0: 간편 단원 생성 (new default) ======
+                with gr.Tab("✨ 간편 단원 생성"):
+                    gr.Markdown(
+                        "### 교안·교재 내용을 붙여넣기만 하면 단원 설정을 **AI 가 자동으로 생성**합니다.\n"
+                        "그 다음 버튼 한 번으로 학생 계정 30개까지 바로 만들어 드려요."
+                    )
+
+                    with gr.Row():
+                        auto_unit_code_in = gr.Textbox(
+                            label="단원 코드 (URL에 쓸 짧은 이름)",
+                            placeholder="예: photo-01, solution-01",
+                            scale=2,
+                        )
+                        auto_unit_name_in = gr.Textbox(
+                            label="단원명",
+                            placeholder="예: 광합성, 용액과 용질",
+                            scale=2,
+                        )
+                        auto_target_grade_in = gr.Textbox(
+                            label="대상 학년",
+                            placeholder="예: 초등 6학년",
+                            scale=2,
+                        )
+
+                    with gr.Row():
+                        auto_persona_in = gr.Textbox(
+                            label="AI 동료 이름 (비워두면 '지후')",
+                            placeholder="지후",
+                            scale=2,
+                        )
+                        auto_account_count_in = gr.Number(
+                            label="학생 계정 수",
+                            value=30,
+                            precision=0,
+                            scale=1,
+                        )
+
+                    auto_content_in = gr.Textbox(
+                        label="📄 교안·교재·메모 (여기에 붙여넣기)",
+                        placeholder=(
+                            "이 단원에 대한 수업 계획, 교과서 발췌, 학습 목표 요약, "
+                            "또는 인터넷에서 찾은 관련 자료 등을 길게 붙여넣어도 됩니다.\n"
+                            "예시)\n"
+                            "광합성은 식물이 빛, 물, 이산화탄소를 이용해 포도당과 산소를 만드는 과정이다. "
+                            "주로 엽록체에서 일어나며, 초등학생들이 자주 가지는 오개념으로는..."
+                        ),
+                        lines=12,
+                    )
+
+                    with gr.Row():
+                        auto_generate_btn = gr.Button(
+                            "🤖 AI로 단원 설정 자동 생성", variant="primary", scale=2
+                        )
+                        auto_save_btn = gr.Button(
+                            "💾 저장 + 학생 계정 30개 생성", variant="stop", scale=2
+                        )
+
+                    auto_status = gr.Markdown("")
+
+                    gr.Markdown("### 미리보기 (필요하면 여기서 수정 후 저장)")
+                    auto_preview_subject = gr.Textbox(
+                        label="과목", value="과학", interactive=True
+                    )
+                    auto_preview_goals = gr.Textbox(
+                        label="학습 목표 (한 줄에 하나)",
+                        lines=5,
+                        interactive=True,
+                    )
+                    auto_preview_rubric = gr.Textbox(
+                        label="루브릭 (JSON, AI 생성 결과)",
+                        lines=8,
+                        interactive=True,
+                    )
+                    auto_preview_miscons = gr.Textbox(
+                        label="알려진 오개념 (한 줄에 하나)",
+                        lines=5,
+                        interactive=True,
+                    )
+                    auto_preview_ai_miscons = gr.Textbox(
+                        label="AI 페르소나가 처음에 품고 있을 오개념 (1~2개, 한 줄에 하나)",
+                        lines=3,
+                        interactive=True,
+                    )
+
+                    gr.Markdown("### 🔗 학생에게 배포할 링크 + 계정")
+                    auto_student_link_out = gr.Textbox(
+                        label="학생 접속 URL (저장 후 채워짐)", interactive=False
+                    )
+                    auto_accounts_df = gr.Dataframe(
+                        headers=["학생 ID", "비밀번호"],
+                        value=[],
+                        interactive=False,
+                        wrap=True,
+                    )
+                    gr.Markdown(
+                        "💡 **복사해서 학생에게 전달**하세요. `data/reports/` 에도 "
+                        "학생 활동이 끝날 때마다 PDF 가 자동 저장됩니다."
+                    )
+
+                # ====== Tab 1: 단원 관리 (상세/고급) ======
+                with gr.Tab("📋 단원 관리 (고급)"):
                     gr.Markdown("### 등록된 단원")
                     units_df = gr.Dataframe(
                         headers=["파일", "unit_code", "단원명", "페르소나", "학생수"],
@@ -385,6 +489,192 @@ def build_instructor_app() -> gr.Blocks:
             if ok:
                 return status, f"✅ {message}", ""  # clear the input
             return status, f"⚠️ {message}", new_key
+
+        # ----- Auto-generate unit (Tab 0) -----
+
+        def _rubric_to_preview_json(rubric_items: list) -> str:
+            import json as _json
+
+            simple = [
+                {
+                    "item_id": r.item_id,
+                    "description": r.description,
+                    "keywords": list(r.keywords),
+                    "required": bool(r.required),
+                }
+                for r in rubric_items
+            ]
+            return _json.dumps(simple, ensure_ascii=False, indent=2)
+
+        def on_auto_generate(
+            unit_code: str,
+            unit_name: str,
+            target_grade: str,
+            persona_name: str,
+            content: str,
+        ) -> tuple[str, str, str, str, str, str]:
+            """Call Claude to draft the unit, fill the preview fields."""
+
+            unit_code = (unit_code or "").strip()
+            unit_name = (unit_name or "").strip()
+            if not unit_code or not unit_name:
+                return (
+                    "⚠️ 단원 코드와 단원명을 먼저 입력하세요.",
+                    "", "", "", "", "",
+                )
+            if not (content or "").strip():
+                return (
+                    "⚠️ 교안/교재 내용을 붙여넣으세요.",
+                    "", "", "", "", "",
+                )
+            try:
+                unit = auto_generate_unit_from_text(
+                    unit_code=unit_code,
+                    unit_name=unit_name,
+                    target_grade=target_grade or "",
+                    raw_content=content,
+                    persona_name=persona_name or "지후",
+                )
+            except ClaudeServiceError as exc:
+                return (f"⚠️ Claude 호출 실패: {exc}", "", "", "", "", "")
+            except ValueError as exc:
+                return (f"⚠️ {exc}", "", "", "", "", "")
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("auto-generate failed")
+                return (f"⚠️ 생성 중 오류: {exc}", "", "", "", "", "")
+
+            goals_text = "\n".join(unit.learning_goals)
+            rubric_text = _rubric_to_preview_json(unit.rubric_items)
+            miscon_text = "\n".join(unit.common_misconceptions)
+            ai_miscon_text = "\n".join(unit.persona_initial_misconceptions)
+
+            return (
+                f"✅ AI가 {len(unit.rubric_items)}개 루브릭·"
+                f"{len(unit.common_misconceptions)}개 오개념을 추출했어요. "
+                "필요하면 아래 미리보기에서 편집한 뒤 **💾 저장** 을 누르세요.",
+                unit.subject,
+                goals_text,
+                rubric_text,
+                miscon_text,
+                ai_miscon_text,
+            )
+
+        def _parse_preview_to_unit(
+            unit_code: str,
+            unit_name: str,
+            target_grade: str,
+            persona_name: str,
+            subject: str,
+            goals_text: str,
+            rubric_json: str,
+            miscon_text: str,
+            ai_miscon_text: str,
+        ):
+            """Re-build a UnitConfig from the possibly-edited preview fields."""
+
+            import json as _json
+
+            from src.models.schemas import RubricItem, UnitConfig
+
+            goals = [g.strip() for g in (goals_text or "").splitlines() if g.strip()]
+            miscons = [m.strip() for m in (miscon_text or "").splitlines() if m.strip()]
+            ai_miscons = [
+                m.strip() for m in (ai_miscon_text or "").splitlines() if m.strip()
+            ]
+            rubric_items: list[RubricItem] = []
+            if (rubric_json or "").strip():
+                try:
+                    for i, item in enumerate(_json.loads(rubric_json)):
+                        rubric_items.append(
+                            RubricItem(
+                                item_id=str(item.get("item_id") or f"r_{i+1}").strip(),
+                                description=str(item.get("description") or "").strip(),
+                                keywords=[
+                                    str(k).strip()
+                                    for k in (item.get("keywords") or [])
+                                    if str(k).strip()
+                                ],
+                                required=bool(item.get("required", True)),
+                            )
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    raise ValueError(f"루브릭 JSON 오류: {exc}") from exc
+
+            return UnitConfig(
+                unit_code=unit_code.strip(),
+                subject=(subject or "과학").strip(),
+                unit_name=unit_name.strip(),
+                target_grade_for_teaching=(target_grade or "").strip() or None,
+                learning_goals=goals,
+                rubric_items=rubric_items,
+                common_misconceptions=miscons,
+                persona_name=(persona_name or "지후").strip() or "지후",
+                persona_role="같은 단원을 공부하는 교대 동료 학생",
+                persona_initial_misconceptions=ai_miscons,
+                hint_max_count=3,
+                session_duration_minutes=15,
+                instructor_name="교수",
+                student_accounts=[],
+            )
+
+        def on_auto_save(
+            unit_code: str,
+            unit_name: str,
+            target_grade: str,
+            persona_name: str,
+            account_count: float,
+            subject: str,
+            goals_text: str,
+            rubric_json: str,
+            miscon_text: str,
+            ai_miscon_text: str,
+        ) -> tuple[str, str, Any]:
+            """Save the unit YAML + generate N student accounts, show them in a table."""
+
+            try:
+                count = max(1, int(account_count or 30))
+            except (TypeError, ValueError):
+                count = 30
+            try:
+                unit = _parse_preview_to_unit(
+                    unit_code=unit_code,
+                    unit_name=unit_name,
+                    target_grade=target_grade,
+                    persona_name=persona_name,
+                    subject=subject,
+                    goals_text=goals_text,
+                    rubric_json=rubric_json,
+                    miscon_text=miscon_text,
+                    ai_miscon_text=ai_miscon_text,
+                )
+            except (ValueError, Exception) as exc:  # noqa: BLE001
+                return f"⚠️ 저장 실패: {exc}", "", []
+
+            try:
+                unit = fill_student_accounts(unit, count=count)
+            except Exception as exc:  # noqa: BLE001
+                return f"⚠️ 계정 생성 실패: {exc}", "", []
+
+            try:
+                save_unit_config(unit, configs_dir=CONFIGS_DIR)
+            except Exception as exc:  # noqa: BLE001
+                return f"⚠️ YAML 저장 실패: {exc}", "", []
+
+            # Build student accounts table
+            rows = [[a.id, a.password] for a in unit.student_accounts]
+
+            link_hint = (
+                f"<현재_공개URL>/?unit={unit.unit_code}\n"
+                "(3_run_app.bat 실행 시 터미널에 뜨는 "
+                "'Running on public URL' 부분을 앞에 붙이세요)"
+            )
+
+            return (
+                f"✅ **{unit.unit_code}** 저장 완료. 학생 {count}명 계정 생성됨.\n"
+                f"단원 YAML: `configs/{unit.unit_code}.yaml`",
+                link_hint,
+                rows,
+            )
 
         # -- Tab 1 handlers --
 
@@ -608,6 +898,43 @@ def build_instructor_app() -> gr.Blocks:
             on_apply_api_key,
             inputs=[api_key_in],
             outputs=[api_key_status, api_key_msg, api_key_in],
+        )
+
+        # ---- Tab 0 wiring ----
+        auto_generate_btn.click(
+            on_auto_generate,
+            inputs=[
+                auto_unit_code_in,
+                auto_unit_name_in,
+                auto_target_grade_in,
+                auto_persona_in,
+                auto_content_in,
+            ],
+            outputs=[
+                auto_status,
+                auto_preview_subject,
+                auto_preview_goals,
+                auto_preview_rubric,
+                auto_preview_miscons,
+                auto_preview_ai_miscons,
+            ],
+        )
+
+        auto_save_btn.click(
+            on_auto_save,
+            inputs=[
+                auto_unit_code_in,
+                auto_unit_name_in,
+                auto_target_grade_in,
+                auto_persona_in,
+                auto_account_count_in,
+                auto_preview_subject,
+                auto_preview_goals,
+                auto_preview_rubric,
+                auto_preview_miscons,
+                auto_preview_ai_miscons,
+            ],
+            outputs=[auto_status, auto_student_link_out, auto_accounts_df],
         )
 
         # Tab 1
