@@ -38,6 +38,7 @@ class Settings:
     openai_api_key: str | None
     elevenlabs_api_key: str | None
     elevenlabs_voice_id: str | None
+    instructor_password: str | None
     database_url: str
     report_dir: str
     log_level: str
@@ -54,6 +55,7 @@ def get_settings() -> Settings:
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY"),
         elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID"),
+        instructor_password=os.getenv("INSTRUCTOR_PASSWORD"),
         database_url=os.getenv("DATABASE_URL", "sqlite:///data/sessions.db"),
         report_dir=os.getenv("REPORT_DIR", "data/reports"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
