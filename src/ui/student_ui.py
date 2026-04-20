@@ -116,11 +116,6 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
                 )
                 login_btn = gr.Button("시작하기", variant="primary", scale=1)
             login_msg = gr.Markdown("")
-            gr.Markdown(
-                "🧑‍🏫 교수자이신가요? "
-                "[관리자 페이지로 이동](?admin=true) · "
-                "브라우저 주소 끝에 `?admin=true` 를 붙여도 됩니다.",
-            )
 
         # =========================================================================
         # Pane 2: PRE_MAP
