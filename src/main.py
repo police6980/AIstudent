@@ -107,7 +107,27 @@ def main(argv: list[str] | None = None) -> None:
 
     init_db()
     app = build_root_app()
-    app.launch(share=args.share, server_name=args.host, server_port=args.port)
+
+    # Print a very visible header so instructors can find the admin URL
+    # fast in a long Gradio startup log.
+    print("\n" + "=" * 68)
+    print("  🧑‍🏫  교수자 관리 페이지 접속 방법")
+    print("=" * 68)
+    print("  아래 'Public URL' 또는 'local URL' 뒤에 /?admin=true 를 붙이세요.")
+    if args.share:
+        print("  예:  https://xxxxxxxx.gradio.live/?admin=true")
+    else:
+        print(f"  예:  http://{args.host}:{args.port}/?admin=true")
+    if not settings.instructor_password:
+        print("  ⚠️  .env 에 INSTRUCTOR_PASSWORD 가 비어있어 관리자 페이지가 잠겨 있습니다.")
+    print("=" * 68 + "\n")
+
+    app.launch(
+        share=args.share,
+        server_name=args.host,
+        server_port=args.port,
+        inbrowser=False,
+    )
 
 
 if __name__ == "__main__":

@@ -42,6 +42,13 @@ _SYSTEM_PROMPT = """\
 4. 그 중 AI 페르소나(교대 동료 학습자)가 세션 시작 시 실제로 품고 시작할
    오개념 1~2개를 고른다. 너무 많으면 대화가 혼란스러워진다.
 5. 과목(subject)은 '과학', '초등 과학 교과교육', '중학교 과학' 등 교수자 자료 톤에 맞춰 기입.
+
+【web_search 도구를 사용할 수 있는 경우】
+- 도구가 주어지면 단원명·핵심 개념을 키워드로 **일반화학·과학교육 자료**를 검색해
+  대표적 오개념·권위 있는 설명을 보강하세요.
+- 검색은 **단원 주제가 모호하거나 자료가 짧을 때에만** 제한적으로 사용합니다.
+- 검색 결과는 JSON 필드에 자연스럽게 녹여 쓰되, 출처를 별도로 나열하지는 않습니다.
+
 6. 출력은 반드시 아래 JSON 스키마만 따르며, 설명·주석·코드블록 백틱 없이 JSON 객체 하나만 반환.
 
 출력 스키마:
@@ -90,6 +97,7 @@ def _claude_call(
     client=None,
     max_tokens: int = 2500,
     temperature: float = 0.3,
+    enable_web_search: bool = False,
 ) -> str:
     if client is None:
         if not settings.anthropic_api_key:
@@ -114,6 +122,7 @@ def _claude_call(
         "messages": [{"role": "user", "content": user_prompt}],
     }
     use_temperature = True
+    use_web_search = enable_web_search
     response = None
     last_exc: Exception | None = None
     _MAX_RETRY = 3
@@ -122,12 +131,26 @@ def _claude_call(
         call_kwargs = dict(kwargs)
         if use_temperature:
             call_kwargs["temperature"] = temperature
+        if use_web_search:
+            call_kwargs["tools"] = [
+                {
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": 3,
+                }
+            ]
         try:
             response = client.messages.create(**call_kwargs)
             break
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             msg = str(exc).lower()
+            if use_web_search and (
+                "web_search" in msg or "unknown field" in msg or "tool" in msg
+            ):
+                logger.warning("Web search tool rejected; retrying without it.")
+                use_web_search = False
+                continue
             if (
                 "temperature" in msg and ("deprecated" in msg or "not" in msg)
                 and use_temperature
@@ -164,6 +187,7 @@ def auto_generate_unit_from_text(
     hint_max_count: int = 3,
     session_duration_minutes: int = 15,
     student_account_count: int = 30,
+    enable_web_search: bool = False,
     settings: Settings | None = None,
     claude_client=None,
 ) -> UnitConfig:
@@ -186,7 +210,12 @@ def auto_generate_unit_from_text(
         target_grade=(target_grade or "").strip() or "(미지정)",
         content=raw_content.strip(),
     )
-    raw = _claude_call(settings, user_prompt, client=claude_client)
+    raw = _claude_call(
+        settings,
+        user_prompt,
+        client=claude_client,
+        enable_web_search=enable_web_search,
+    )
 
     try:
         parsed = _extract_json(raw)

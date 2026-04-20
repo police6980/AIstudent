@@ -55,7 +55,16 @@ init_db()
 _student_app = build_student_app()
 _instructor_app = build_instructor_app()
 
-with gr.Blocks(title="예비교사 과학 설명 훈련") as demo:
+_theme = gr.themes.Soft(
+    primary_hue="indigo",
+    secondary_hue="blue",
+    neutral_hue="slate",
+    radius_size=gr.themes.sizes.radius_md,
+    spacing_size=gr.themes.sizes.spacing_md,
+    font=[gr.themes.GoogleFont("Nanum Gothic"), "system-ui", "sans-serif"],
+)
+
+with gr.Blocks(title="예비교사 과학 설명 훈련", theme=_theme) as demo:
     with gr.Group(visible=True) as _student_group:
         _student_app.render()
     with gr.Group(visible=False) as _instructor_group:

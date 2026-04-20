@@ -57,6 +57,9 @@ from src.services.unit_auto_generator import (
 
 logger = logging.getLogger(__name__)
 
+# Where unit YAMLs live (keeps on_auto_save's save_unit_config call happy).
+CONFIGS_DIR = Path("configs")
+
 
 def _units_table() -> list[list[Any]]:
     return [
@@ -135,8 +138,20 @@ def _bullets_to_text(items: list[str]) -> str:
 def build_instructor_app() -> gr.Blocks:
     """Return the Gradio Blocks app for the instructor management page."""
 
-    with gr.Blocks(title="교수자 관리 페이지") as app:
-        gr.Markdown("# 🧑‍🏫 교수자 관리 페이지")
+    _theme = gr.themes.Soft(
+        primary_hue="indigo",
+        secondary_hue="blue",
+        neutral_hue="slate",
+        radius_size=gr.themes.sizes.radius_md,
+        spacing_size=gr.themes.sizes.spacing_md,
+        font=[gr.themes.GoogleFont("Nanum Gothic"), "system-ui", "sans-serif"],
+    )
+
+    with gr.Blocks(title="교수자 관리 페이지", theme=_theme) as app:
+        gr.Markdown(
+            "# 🧑‍🏫 교수자 관리 페이지\n"
+            "*단원 설정·학생 링크 생성·세션 분석이 여기서 이루어져요.*"
+        )
 
         authed = gr.State(value=False)
 
@@ -214,13 +229,27 @@ def build_instructor_app() -> gr.Blocks:
                         "📄 2단계 · 교안·참고 자료 (AI 가 대화 중에도 참고)", open=True
                     ):
                         gr.Markdown(
-                            "이 자료는 **두 가지 용도**로 쓰입니다:\n"
-                            "1. 학생과 대화하는 중에 AI 가 자료를 참고해 더 정확한 질문을 만듭니다.\n"
-                            "2. 아래 **🤖 AI로 자동 추출** 버튼을 누르면 이 내용에서 "
-                            "학습 목표·루브릭·오개념을 알아서 뽑아줍니다."
+                            "### 📥 PDF 업로드하거나 텍스트 붙여넣기\n"
+                            "- PDF 를 업로드하면 자동으로 본문 텍스트가 아래 입력칸에 채워집니다.\n"
+                            "- 이 자료는 **두 가지 용도**:\n"
+                            "  ① 학생 대화 중 AI 가 참고해 더 정확한 질문 생성\n"
+                            "  ② **🤖 AI 자동 추출** 버튼으로 학습목표·루브릭·오개념 뽑기"
                         )
+
+                        with gr.Row():
+                            auto_pdf_upload = gr.File(
+                                label="📄 PDF 업로드 (선택)",
+                                file_types=[".pdf"],
+                                type="filepath",
+                                scale=3,
+                            )
+                            auto_pdf_status = gr.Markdown(
+                                "PDF 가 없어도 아래 텍스트 박스에 직접 붙여넣으면 됨.",
+                                elem_id="pdf-status",
+                            )
+
                         auto_content_in = gr.Textbox(
-                            label="교안·교재·메모",
+                            label="📝 교안·교재·메모 (PDF 내용이 여기에 자동 표시됨)",
                             placeholder=(
                                 "예)\n"
                                 "광합성은 식물이 빛, 물, 이산화탄소를 이용해 포도당과 산소를 "
@@ -232,16 +261,18 @@ def build_instructor_app() -> gr.Blocks:
 
                         with gr.Row():
                             auto_web_search_in = gr.Checkbox(
-                                label="🌐 AI 가 대화 중 웹 검색 허용 (느려지고 비용 증가)",
+                                label="🌐 AI 가 대화 중 웹 검색 허용 (비용/시간 증가)",
                                 value=False,
                                 info=(
                                     "켜두면 AI가 관련 예시·비유를 웹에서 찾아 질문에 활용합니다. "
-                                    "Anthropic API 의 web_search 도구 사용 (턴당 최대 2회)."
+                                    "단원 생성 시 AI 자동 추출에도 웹 검색이 적용됩니다."
                                 ),
+                                scale=3,
                             )
                         auto_generate_btn = gr.Button(
                             "🤖 AI 로 학습목표·루브릭·오개념 자동 추출",
                             variant="secondary",
+                            size="lg",
                         )
 
                     # -------- STEP 3: 추출·편집 --------
@@ -541,12 +572,52 @@ def build_instructor_app() -> gr.Blocks:
             ]
             return _json.dumps(simple, ensure_ascii=False, indent=2)
 
+        def on_pdf_uploaded(pdf_path: str, existing_text: str) -> tuple[str, str]:
+            """Extract text from uploaded PDF and append to the textbox.
+
+            If the textbox already has content, we append with a separator so
+            instructors can combine multiple PDFs + manual notes.
+            """
+
+            if not pdf_path:
+                return "PDF 가 없어도 아래 텍스트 박스에 직접 붙여넣으면 됨.", existing_text or ""
+            try:
+                import pypdf
+
+                reader = pypdf.PdfReader(pdf_path)
+                parts = []
+                for i, page in enumerate(reader.pages):
+                    try:
+                        t = page.extract_text() or ""
+                    except Exception:  # noqa: BLE001
+                        t = ""
+                    if t.strip():
+                        parts.append(t)
+                extracted = "\n\n".join(parts).strip()
+                if not extracted:
+                    return (
+                        "⚠️ PDF에서 텍스트를 추출하지 못했어요 (스캔 PDF일 수 있음).\n"
+                        "텍스트를 직접 붙여넣어주세요.",
+                        existing_text or "",
+                    )
+                combined = extracted
+                if existing_text and existing_text.strip():
+                    combined = existing_text.strip() + "\n\n---\n\n" + extracted
+                return (
+                    f"✅ PDF 읽기 완료 ({len(reader.pages)}페이지, {len(extracted)}자 추출).",
+                    combined,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("PDF read failed")
+                return f"⚠️ PDF 읽기 실패: {exc}", existing_text or ""
+
         def on_auto_generate(
             unit_code: str,
             unit_name: str,
             target_grade: str,
             persona_name: str,
             content: str,
+            use_web_search: bool = False,
         ) -> tuple[str, str, str, str, str, str]:
             """Call Claude to draft the unit, fill the preview fields."""
 
@@ -569,6 +640,7 @@ def build_instructor_app() -> gr.Blocks:
                     target_grade=target_grade or "",
                     raw_content=content,
                     persona_name=persona_name or "지후",
+                    enable_web_search=bool(use_web_search),
                 )
             except ClaudeServiceError as exc:
                 return (f"⚠️ Claude 호출 실패: {exc}", "", "", "", "", "")
@@ -930,6 +1002,12 @@ def build_instructor_app() -> gr.Blocks:
         )
 
         # ---- Tab 0 wiring ----
+        auto_pdf_upload.change(
+            on_pdf_uploaded,
+            inputs=[auto_pdf_upload, auto_content_in],
+            outputs=[auto_pdf_status, auto_content_in],
+        )
+
         auto_generate_btn.click(
             on_auto_generate,
             inputs=[
@@ -938,6 +1016,7 @@ def build_instructor_app() -> gr.Blocks:
                 auto_target_grade_in,
                 auto_persona_in,
                 auto_content_in,
+                auto_web_search_in,
             ],
             outputs=[
                 auto_status,

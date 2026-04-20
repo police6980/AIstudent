@@ -80,7 +80,16 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
     mgr = manager or SessionManager()
     questions = load_reflection_questions()
 
-    with gr.Blocks(title="예비교사 과학 설명 훈련") as app:
+    _student_theme = gr.themes.Soft(
+        primary_hue="blue",
+        secondary_hue="indigo",
+        neutral_hue="slate",
+        radius_size=gr.themes.sizes.radius_md,
+        spacing_size=gr.themes.sizes.spacing_md,
+        font=[gr.themes.GoogleFont("Nanum Gothic"), "system-ui", "sans-serif"],
+    )
+
+    with gr.Blocks(title="예비교사 과학 설명 훈련", theme=_student_theme) as app:
         gr.Markdown(
             "## 🧠 예비교사 과학 설명 훈련\n"
             "동료 학습자(AI)에게 오늘 배운 단원을 설명하며, 본인의 이해를 깊게 하는 활동입니다. "
