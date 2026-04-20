@@ -1,17 +1,34 @@
-"""Hugging Face Spaces entrypoint.
-
-HF Spaces looks for `demo` in app.py and auto-launches it. We reuse the
-same student + instructor composition as src.main, but without
-`share=True` (Spaces provides its own public URL).
-
-Environment variables (set these as HF Space Secrets):
-    ANTHROPIC_API_KEY      — required for all AI calls
-    CLAUDE_MODEL           — optional, default claude-sonnet-4-6
-    CLAUDE_ANALYSIS_MODEL  — optional, default claude-opus-4-7
-    INSTRUCTOR_PASSWORD    — optional, enables ?admin=true page
-"""
+"""Hugging Face Spaces entrypoint."""
 
 from __future__ import annotations
+
+
+def _patch_gradio_client_bool_schema_bug() -> None:
+    """gradio_client keeps raising TypeError on Pydantic bool schemas,
+    including under gradio 5. Patch both entry points to return 'Any'
+    when a bool lands where a dict is expected."""
+
+    import gradio_client.utils as _gcu
+
+    _orig_get_type = _gcu.get_type
+    _orig_jspt = _gcu._json_schema_to_python_type
+
+    def _safe_get_type(schema):
+        if isinstance(schema, bool):
+            return "Any"
+        return _orig_get_type(schema)
+
+    def _safe_jspt(schema, defs=None):
+        if isinstance(schema, bool):
+            return "Any"
+        return _orig_jspt(schema, defs)
+
+    _gcu.get_type = _safe_get_type
+    _gcu._json_schema_to_python_type = _safe_jspt
+
+
+_patch_gradio_client_bool_schema_bug()
+
 
 import logging
 
@@ -48,7 +65,7 @@ with gr.Blocks(title="예비교사 과학 설명 훈련") as demo:
         try:
             params = request.query_params
             admin_flag = (params.get("admin") or "").strip().lower()
-        except Exception:  # pragma: no cover - defensive
+        except Exception:
             admin_flag = ""
         show_admin = admin_flag in {"true", "1", "yes"}
         return (
@@ -59,9 +76,4 @@ with gr.Blocks(title="예비교사 과학 설명 훈련") as demo:
     demo.load(_on_load, inputs=None, outputs=[_student_group, _instructor_group])
 
 
-# Launch at module level (not inside __name__ == '__main__') so that HF's
-# `python app.py` execution actually starts the Gradio server. With the
-# __main__ guard Gradio 5 still launched, but removing the launch entirely
-# caused the script to exit cleanly (exit code 0) and HF showed
-# "No API found" because no server was ever bound.
 demo.launch()
