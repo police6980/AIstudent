@@ -1,3 +1,15 @@
+---
+title: 예비교사 과학 설명 훈련
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 예비교사 과학 설명 훈련 시스템
 
 교육대학교 학생(예비 교사)이 단원 내용을 **동료 학습자(AI)에게 설명**하면서
