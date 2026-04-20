@@ -1,0 +1,46 @@
+session_code: "photo-g6-0420"
+grade_level: elementary
+subject: "과학"
+unit_name: "광합성"
+
+learning_goals:
+  - "광합성의 조건 (빛, 물, 이산화탄소)"
+  - "광합성의 산물 (포도당, 산소)"
+  - "광합성이 일어나는 장소 (엽록체)"
+
+rubric_items:
+  - item_id: "condition_light"
+    description: "빛이 광합성의 조건임을 언급"
+    keywords: ["빛", "햇빛", "해", "광"]
+    required: true
+  - item_id: "condition_water"
+    description: "물이 광합성의 조건임을 언급"
+    keywords: ["물", "수분"]
+    required: true
+  - item_id: "product_oxygen"
+    description: "산소가 산물임을 언급"
+    keywords: ["산소"]
+    required: true
+  - item_id: "location_chloroplast"
+    description: "엽록체의 역할 언급"
+    keywords: ["엽록체", "초록", "녹색 알갱이"]
+    required: false
+
+common_misconceptions:
+  - "식물은 흙에서 양분을 흡수해 자란다"
+  - "광합성은 낮에만, 호흡은 밤에만 일어난다"
+  - "잎의 녹색 색소가 산소를 만든다"
+
+persona_name: "수아"
+persona_role: "호기심 많은 또래 친구"
+
+hint_max_count: 3
+hint_types_allowed:
+  - bridging
+  - counterexample
+  - metacognitive
+
+session_duration_minutes: 10
+
+teacher_email: "teacher@school.kr"
+teacher_name: "김교사"

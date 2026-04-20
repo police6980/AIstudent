@@ -1,0 +1,48 @@
+[project]
+name = "vygotsky-science-tutor"
+version = "0.1.0"
+description = "Vygotsky scaffolding-based AI conversational science learning system (MVP)"
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "elevenlabs>=1.0.0",
+    "gradio>=4.44.0",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "reportlab>=4.0",
+    "pypdf>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0",
+    "ruff>=0.5.0",
+    "pytest>=8.0",
+    "pre-commit>=3.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]  # black handles line length
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that hit real external APIs (deselect with '-m \"not integration\"')",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

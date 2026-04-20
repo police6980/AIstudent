@@ -1,0 +1,37 @@
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# App data (local only)
+data/sessions.db
+data/sessions.db-journal
+data/reports/
+logs/
+*.log
+
+# Audio temp files
+*.wav
+*.mp3
+*.m4a
+*.webm
+!tests/fixtures/*.wav
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
