@@ -7,7 +7,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from src.models.enums import HintType, SessionStatus, Speaker
+from src.models.enums import HintType, SessionStatus, SessionStep, Speaker
 
 
 class RubricItem(BaseModel):
@@ -84,6 +84,7 @@ class SessionInfo(BaseModel):
     start_time: datetime
     end_time: Optional[datetime]
     status: SessionStatus
+    current_step: SessionStep = SessionStep.PRE_MAP
 
 
 class SessionReport(BaseModel):

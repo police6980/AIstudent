@@ -26,6 +26,7 @@ class SessionRow(Base):
     start_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     end_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="in_progress", index=True)
+    current_step: Mapped[str] = mapped_column(String(32), default="pre_map", index=True)
     hints_remaining: Mapped[int] = mapped_column(Integer, default=0)
     analysis_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Phase B: pre/post Novak concept maps + initial diagnosis + reflection answers

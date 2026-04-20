@@ -8,7 +8,7 @@ from src.models.concept_map import (
     Example,
     Proposition,
 )
-from src.models.enums import HintType, SessionStatus, Speaker
+from src.models.enums import HintType, SessionStatus, SessionStep, Speaker
 from src.models.schemas import (
     HintRequest,
     RubricItem,
@@ -22,6 +22,7 @@ from src.models.schemas import (
 __all__ = [
     "HintType",
     "SessionStatus",
+    "SessionStep",
     "Speaker",
     "RubricItem",
     "StudentAccount",

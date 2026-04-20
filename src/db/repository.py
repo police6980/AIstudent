@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from src.db.database import get_session_factory
 from src.models.db_models import HintRequestRow, SessionRow, TurnRow
-from src.models.enums import HintType, SessionStatus, Speaker
+from src.models.enums import HintType, SessionStatus, SessionStep, Speaker
 from src.models.schemas import HintRequest, SessionInfo, Turn, UnitConfig
 
 
@@ -40,6 +40,7 @@ class SessionRepository:
                 unit_config_json=unit_config.model_dump(mode="json"),
                 start_time=datetime.utcnow(),
                 status=SessionStatus.IN_PROGRESS.value,
+                current_step=SessionStep.PRE_MAP.value,
                 hints_remaining=unit_config.hint_max_count,
             )
             db.add(row)
@@ -55,6 +56,17 @@ class SessionRepository:
                 raise LookupError(f"Session not found: {session_id}")
             row.end_time = datetime.utcnow()
             row.status = SessionStatus.COMPLETED.value
+            row.current_step = SessionStep.COMPLETED.value
+            db.commit()
+
+    def update_step(self, session_id: str, step: SessionStep) -> None:
+        """Advance the session's current_step marker."""
+
+        with self._factory() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None:
+                raise LookupError(f"Session not found: {session_id}")
+            row.current_step = step.value
             db.commit()
 
     def get_session(self, session_id: str) -> Optional[SessionRow]:
@@ -88,6 +100,7 @@ class SessionRepository:
                 start_time=row.start_time,
                 end_time=row.end_time,
                 status=SessionStatus(row.status),
+                current_step=SessionStep(row.current_step or SessionStep.PRE_MAP.value),
             )
 
     # -- turns -----------------------------------------------------------

@@ -26,3 +26,24 @@ class SessionStatus(str, Enum):
 
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
+
+
+class SessionStep(str, Enum):
+    """Granular step within an in_progress session.
+
+    Flow: PRE_MAP → DIALOGUE → POST_MAP → REFLECTION → COMPLETED
+    """
+
+    PRE_MAP = "pre_map"          # student is building the initial concept map
+    DIALOGUE = "dialogue"        # concept map submitted, chatting with AI
+    POST_MAP = "post_map"        # chat ended, student building the post-map
+    REFLECTION = "reflection"    # post-map submitted, answering 5 questions
+    COMPLETED = "completed"      # everything done; PDF available (Phase B5)
+
+    @classmethod
+    def order(cls) -> list["SessionStep"]:
+        return [cls.PRE_MAP, cls.DIALOGUE, cls.POST_MAP, cls.REFLECTION, cls.COMPLETED]
+
+    def is_before(self, other: "SessionStep") -> bool:
+        seq = self.order()
+        return seq.index(self) < seq.index(other)
