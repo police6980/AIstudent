@@ -1,7 +1,18 @@
 """Orchestrates the preservice-teacher — AI peer dialogue lifecycle.
 
-Phase A: text dialogue, resume-or-new logic, completion lock.
-Phase B (future): analysis + PDF generation on completion.
+State machine (Phase B2):
+    PRE_MAP    — student builds initial concept map
+    DIALOGUE   — map submitted, AI opens with diagnosis-informed question,
+                 then back-and-forth
+    POST_MAP   — student clicked 'end dialogue', now builds post-map
+    REFLECTION — post-map submitted, student answers 5 reflection questions
+    COMPLETED  — everything done, PDF available (Phase B5)
+
+Rules:
+    - Each transition must be explicit (submit_pre_concept_map, etc).
+    - submit_student_turn is only valid in DIALOGUE.
+    - Re-login resumes at the current_step.
+    - COMPLETED sessions are locked (SessionLockedError).
 """
 
 from __future__ import annotations
@@ -18,15 +29,21 @@ from src.config.unit_config import (
 )
 from src.db.database import init_db
 from src.db.repository import SessionRepository
-from src.models.enums import SessionStatus, Speaker
+from src.models.concept_map import ConceptMap
+from src.models.enums import SessionStatus, SessionStep, Speaker
 from src.models.schemas import Turn, UnitConfig
 from src.services.claude_service import ClaudeService, ClaudeServiceError
+from src.services.concept_maps import (
+    InitialDiagnosis,
+    diagnose_initial_concept_map,
+)
+from src.services.diagnostics import load_reflection_questions
 from src.services.scaffolding_engine import build_system_prompt
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIGS_DIR = Path("configs")
-MAX_HISTORY_TURNS = 24  # Layer 4 window
+MAX_HISTORY_TURNS = 24
 
 
 class SessionLockedError(RuntimeError):
@@ -37,12 +54,24 @@ class AuthenticationError(RuntimeError):
     """Raised when (unit_code, student_id, password) is invalid."""
 
 
+class StepViolationError(RuntimeError):
+    """Raised when a caller tries to perform an action out of step order."""
+
+
 @dataclass
 class LoginResult:
     session_id: str
     unit_config: UnitConfig
-    is_new: bool                  # True if we created a fresh session, False if resumed
-    turns: list[Turn]             # existing turns (may be empty for new sessions)
+    is_new: bool
+    current_step: SessionStep
+    turns: list[Turn]
+
+
+@dataclass
+class PreMapResult:
+    turns: list[Turn]
+    diagnosis: Optional[InitialDiagnosis]
+    next_step: SessionStep
 
 
 class SessionManager:
@@ -59,10 +88,10 @@ class SessionManager:
         self._claude = claude or ClaudeService()
         self._configs_dir = configs_dir
 
-    # -- auth & session resolution --------------------------------------
+    # -- auth & resume ---------------------------------------------------
 
     def load_unit(self, unit_code: str) -> UnitConfig:
-        """Resolve `unit_code` to a UnitConfig, surfacing a friendly error if missing."""
+        """Resolve `unit_code` to a UnitConfig with a friendly error on miss."""
 
         try:
             return find_unit_config_by_code(unit_code, self._configs_dir)
@@ -70,12 +99,7 @@ class SessionManager:
             raise AuthenticationError(f"단원을 찾을 수 없어요: {exc}") from exc
 
     def login(self, unit_code: str, student_id: str, password: str) -> LoginResult:
-        """Authenticate, then resume or create a session.
-
-        Raises:
-            AuthenticationError — unknown unit or bad credentials
-            SessionLockedError — student already completed this unit's session
-        """
+        """Authenticate, then resume or create a session at the appropriate step."""
 
         unit_config = self.load_unit(unit_code)
         if not authenticate(unit_config, student_id, password):
@@ -83,59 +107,139 @@ class SessionManager:
 
         existing = self._repo.find_session(unit_code, student_id)
 
-        # Case 1: no session yet — create fresh + open with AI greeting.
         if existing is None:
+            # Fresh session — starts at PRE_MAP. AI greeting waits until map submission.
             session_id = self._repo.create_session(unit_config, student_id)
-            self._produce_opening_turn(session_id, unit_config)
-            turns = self._repo.get_turns(session_id)
             return LoginResult(
-                session_id=session_id, unit_config=unit_config, is_new=True, turns=turns
+                session_id=session_id,
+                unit_config=unit_config,
+                is_new=True,
+                current_step=SessionStep.PRE_MAP,
+                turns=[],
             )
 
-        # Case 2: completed — locked.
         if existing.status == SessionStatus.COMPLETED:
             raise SessionLockedError(
                 f"이미 완료된 세션이에요 ({existing.end_time:%Y-%m-%d %H:%M} 종료). "
                 "다시 참여하려면 교수자에게 문의하세요."
             )
 
-        # Case 3: in_progress — resume.
         turns = self._repo.get_turns(existing.session_id)
         return LoginResult(
             session_id=existing.session_id,
             unit_config=unit_config,
             is_new=False,
+            current_step=existing.current_step,
             turns=turns,
         )
 
-    # -- conversation ---------------------------------------------------
+    # -- step helpers ---------------------------------------------------
 
-    def _produce_opening_turn(self, session_id: str, unit_config: UnitConfig) -> Turn:
-        system_prompt = build_system_prompt(unit_config)
-        try:
-            opening_text = self._claude.generate_response(system_prompt, history=[])
-        except ClaudeServiceError as exc:
-            logger.error("Failed to produce opening turn: %s", exc)
-            opening_text = (
-                f"(시스템 메시지: AI 응답 생성 실패 — {exc})\n"
-                "환경변수 ANTHROPIC_API_KEY 가 설정되었는지 확인해주세요."
+    def _get_session_or_raise(self, session_id: str):
+        row = self._repo.get_session(session_id)
+        if row is None:
+            raise LookupError(f"세션을 찾을 수 없어요: {session_id}")
+        if row.status == SessionStatus.COMPLETED.value:
+            raise SessionLockedError("이미 종료된 세션이에요.")
+        return row
+
+    def _require_step(self, row, required: SessionStep) -> None:
+        if row.current_step != required.value:
+            raise StepViolationError(
+                f"현재 단계는 '{row.current_step}' 인데 '{required.value}' 작업이 요청되었어요."
             )
-        return self._repo.append_turn(session_id, Speaker.AI, opening_text)
+
+    # -- PRE_MAP → DIALOGUE ----------------------------------------------
+
+    def submit_pre_concept_map(
+        self, session_id: str, concept_map: ConceptMap
+    ) -> PreMapResult:
+        """Persist the initial map, run diagnosis, transition to DIALOGUE.
+
+        On Claude failure the map is still saved and the AI opens with a
+        generic greeting; we do not block the student.
+        """
+
+        row = self._get_session_or_raise(session_id)
+        self._require_step(row, SessionStep.PRE_MAP)
+
+        self._repo.save_pre_concept_map(session_id, concept_map.model_dump(mode="json"))
+        unit_config = UnitConfig.model_validate(row.unit_config_json)
+
+        diagnosis: InitialDiagnosis | None = None
+        try:
+            diagnosis = diagnose_initial_concept_map(concept_map, unit_config)
+            self._repo.save_initial_diagnosis(session_id, diagnosis.to_json())
+        except ClaudeServiceError as exc:
+            logger.error("Initial concept map diagnosis failed: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - any surprise shouldn't block student
+            logger.exception("Unexpected failure in initial diagnosis: %s", exc)
+
+        # Open the dialogue with an AI turn tailored to the diagnosis if available.
+        opening_text = self._produce_opening_with_diagnosis(unit_config, diagnosis)
+        self._repo.append_turn(session_id, Speaker.AI, opening_text)
+        self._repo.update_step(session_id, SessionStep.DIALOGUE)
+
+        return PreMapResult(
+            turns=self._repo.get_turns(session_id),
+            diagnosis=diagnosis,
+            next_step=SessionStep.DIALOGUE,
+        )
+
+    def _produce_opening_with_diagnosis(
+        self, unit_config: UnitConfig, diagnosis: InitialDiagnosis | None
+    ) -> str:
+        """Ask Claude to produce the opening AI turn, optionally guided by the diagnosis."""
+
+        system_prompt = build_system_prompt(unit_config)
+        if diagnosis and diagnosis.recommended_first_question:
+            user_seed = (
+                "(세션 시작) 학생이 방금 초기 개념도를 제출했어. "
+                "진단 결과 학생은 다음 요소를 갖췄고(강점) 다음 지점에서 설명을 필요로 해:\n"
+                f"- 강점: {', '.join(diagnosis.strong_points) or '(특이사항 없음)'}\n"
+                f"- ZPD 목표: {', '.join(diagnosis.zpd_targets) or '(특이사항 없음)'}\n"
+                "첫 발화는 페르소나로서 학생에게 가볍게 말을 걸어 아래 질문을 "
+                "네 말로 자연스럽게 녹여서 던져줘. (질문을 그대로 복붙하지 말고 "
+                "너의 말투로 각색해.)\n"
+                f"추천 질문: \"{diagnosis.recommended_first_question}\""
+            )
+        else:
+            user_seed = (
+                "(세션 시작) 학생에게 페르소나로서 먼저 인사하며, "
+                "방금 제출한 초기 개념도를 바탕으로 오늘 배운 내용을 네게 "
+                "설명해달라고 자연스럽게 말을 걸어줘."
+            )
+
+        try:
+            from src.models.schemas import Turn as TurnSchema  # local to avoid cycle
+            seed_turn = TurnSchema.model_construct(
+                turn_id="_seed",
+                session_id="_seed",
+                speaker=Speaker.STUDENT,
+                content=user_seed,
+                timestamp=__import__("datetime").datetime.utcnow(),
+            )
+            return self._claude.generate_response(system_prompt, history=[seed_turn])
+        except ClaudeServiceError as exc:
+            logger.error("Opening turn generation failed: %s", exc)
+            return (
+                "안녕, 오늘 단원 같이 정리해보기로 했지? "
+                "네가 제출한 개념도 잘 봤어. 어디서부터 설명해줄래?"
+            )
+
+    # -- DIALOGUE --------------------------------------------------------
 
     def submit_student_turn(self, session_id: str, student_text: str) -> Turn:
-        """Persist the student utterance, generate the AI reply, return the AI turn."""
+        """Append the student's utterance and return the AI's reply."""
 
         student_text = (student_text or "").strip()
         if not student_text:
             raise ValueError("빈 입력은 보낼 수 없어요.")
 
-        session_row = self._repo.get_session(session_id)
-        if session_row is None:
-            raise LookupError(f"세션을 찾을 수 없어요: {session_id}")
-        if session_row.status == SessionStatus.COMPLETED.value:
-            raise SessionLockedError("이미 종료된 세션이에요.")
+        row = self._get_session_or_raise(session_id)
+        self._require_step(row, SessionStep.DIALOGUE)
 
-        unit_config = UnitConfig.model_validate(session_row.unit_config_json)
+        unit_config = UnitConfig.model_validate(row.unit_config_json)
         self._repo.append_turn(session_id, Speaker.STUDENT, student_text)
 
         history = self._repo.get_turns(session_id)
@@ -151,13 +255,59 @@ class SessionManager:
 
         return self._repo.append_turn(session_id, Speaker.AI, ai_text)
 
-    def complete_session(self, session_id: str) -> None:
-        """Lock the session. Phase B will trigger analysis+PDF here."""
+    def end_dialogue(self, session_id: str) -> None:
+        """Transition DIALOGUE → POST_MAP. No PDF generation yet."""
 
+        row = self._get_session_or_raise(session_id)
+        self._require_step(row, SessionStep.DIALOGUE)
+        self._repo.update_step(session_id, SessionStep.POST_MAP)
+
+    # -- POST_MAP → REFLECTION -------------------------------------------
+
+    def submit_post_concept_map(self, session_id: str, concept_map: ConceptMap) -> SessionStep:
+        row = self._get_session_or_raise(session_id)
+        self._require_step(row, SessionStep.POST_MAP)
+
+        self._repo.save_post_concept_map(session_id, concept_map.model_dump(mode="json"))
+        self._repo.update_step(session_id, SessionStep.REFLECTION)
+        return SessionStep.REFLECTION
+
+    # -- REFLECTION → COMPLETED ------------------------------------------
+
+    def submit_reflection_answers(
+        self,
+        session_id: str,
+        answers: dict[str, str],
+    ) -> None:
+        """Validate all reflection answers meet min_chars, then save + complete.
+
+        Raises ValueError listing which questions fail the threshold. If any
+        fail, nothing is saved — the UI re-prompts.
+        """
+
+        row = self._get_session_or_raise(session_id)
+        self._require_step(row, SessionStep.REFLECTION)
+
+        questions = load_reflection_questions()
+        problems: list[str] = []
+        normalized: dict[str, str] = {}
+        for q in questions:
+            text = (answers.get(q.id) or "").strip()
+            ok, count = q.validate_answer(text)
+            if not ok:
+                problems.append(
+                    f"'{q.title}' 응답이 {q.min_chars}자 이상 필요해요 (현재 {count}자)."
+                )
+            normalized[q.id] = text
+
+        if problems:
+            raise ValueError("\n".join(problems))
+
+        self._repo.save_reflection_answers(session_id, normalized)
+        # Mark completed. Phase B4/B5 will produce the analysis + PDF here.
         self._repo.complete_session(session_id)
-        logger.info("Session %s completed. Phase B analysis hook goes here.", session_id)
 
-    # -- read-only ------------------------------------------------------
+    # -- read-only helpers ----------------------------------------------
 
     def get_turns(self, session_id: str) -> list[Turn]:
         return self._repo.get_turns(session_id)

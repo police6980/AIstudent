@@ -19,8 +19,10 @@ from src.services.scaffolding_engine import build_system_prompt, build_unit_laye
 from src.services.session_manager import (
     AuthenticationError,
     LoginResult,
+    PreMapResult,
     SessionLockedError,
     SessionManager,
+    StepViolationError,
 )
 
 __all__ = [
@@ -29,8 +31,10 @@ __all__ = [
     "build_unit_layer",
     "SessionManager",
     "LoginResult",
+    "PreMapResult",
     "AuthenticationError",
     "SessionLockedError",
+    "StepViolationError",
     "InstructorAuthError",
     "UnitSummary",
     "SessionSummary",
