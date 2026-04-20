@@ -69,10 +69,16 @@ def rubric_table(
     ]
     rows = [header]
     for item_id, achieved in rubric_items_achieved.items():
-        mark = "✅" if achieved else "❌"
+        # NanumGothic lacks ✅/❌ emoji glyphs, so we use coloured O/X that
+        # render reliably on any installed Korean font.
+        mark_html = (
+            "<font color='#1B9E45'><b>O</b></font>"
+            if achieved
+            else "<font color='#D23A3A'><b>X</b></font>"
+        )
         rows.append(
             [
-                Paragraph(mark, styles["BodyKR"]),
+                Paragraph(mark_html, styles["BodyKR"]),
                 Paragraph(esc(rubric_labels.get(item_id, "")), styles["BodyKR"]),
                 Paragraph(esc(item_id), styles["BodySmallKR"]),
             ]
