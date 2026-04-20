@@ -1,76 +1,98 @@
-"""Tests for the 4-layer prompt composition."""
+"""Tests for the 4-layer prompt composition (preservice-teacher setup)."""
 
 from __future__ import annotations
 
-import pytest
-
-from src.models.enums import GradeLevel, HintType
-from src.models.schemas import RubricItem, UnitConfig
-from src.prompts import LAYER1_VYGOTSKY_PRINCIPLES
-from src.prompts.layer2_grade import get_grade_layer_prompt
+from src.models.enums import HintType
+from src.models.schemas import RubricItem, StudentAccount, UnitConfig
+from src.prompts import LAYER1_VYGOTSKY_PRINCIPLES, LAYER2_PRESERVICE
 from src.services.scaffolding_engine import build_system_prompt, build_unit_layer
 
 
-def _make_config(grade: GradeLevel) -> UnitConfig:
-    return UnitConfig(
-        session_code="test",
-        grade_level=grade,
-        subject="과학",
+def _make_config(**overrides) -> UnitConfig:
+    base = UnitConfig(
+        unit_code="test-01",
+        subject="초등 과학",
         unit_name="테스트 단원",
+        target_grade_for_teaching="초등 5학년",
         learning_goals=["개념 A", "개념 B"],
         rubric_items=[
-            RubricItem(item_id="r1", description="A를 언급", keywords=["A"], required=True),
-            RubricItem(item_id="r2", description="B를 언급", keywords=["B"], required=False),
+            RubricItem(item_id="r1", description="A를 설명", keywords=["A"], required=True),
+            RubricItem(item_id="r2", description="B를 설명", keywords=["B"], required=False),
         ],
-        common_misconceptions=["오개념 1"],
-        persona_name="루나",
-        persona_role="또래 친구",
+        common_misconceptions=["오개념 1", "오개념 2"],
+        persona_name="지후",
+        persona_initial_misconceptions=["오개념 1"],
         hint_max_count=3,
-        hint_types_allowed=[HintType.BRIDGING, HintType.METACOGNITIVE],
+        hint_types_allowed=[HintType.SOCRATIC, HintType.METACOGNITIVE],
         session_duration_minutes=10,
-        teacher_email="t@e.kr",
-        teacher_name="김교사",
+        instructor_name="김교수",
+        student_accounts=[StudentAccount(id="s01", password="abc12")],
     )
+    return base.model_copy(update=overrides)
 
 
-@pytest.mark.parametrize(
-    "grade",
-    [GradeLevel.ELEMENTARY, GradeLevel.MIDDLE, GradeLevel.HIGH, GradeLevel.SCIENCE_HIGH],
-)
-def test_prompt_builds_for_all_grades(grade: GradeLevel):
-    cfg = _make_config(grade)
+def test_prompt_contains_all_three_layers():
+    cfg = _make_config()
     prompt = build_system_prompt(cfg)
 
-    # Layer 1 principle marker is present.
+    # Layer 1 markers
     assert "절대 원칙" in prompt
-    assert "답을 주지 않습니다" in prompt
-    # Layer 2 marker is present and matches the grade.
-    layer2 = get_grade_layer_prompt(grade)
-    assert layer2.split("\n", 1)[0] in prompt
-    # Layer 3 unit context is present.
+    assert "답을 먼저 주지 않는다" in prompt
+    assert "오개념을 가진 학습자" in prompt  # role-reversal marker
+
+    # Layer 2 markers
+    assert "동료 학습자" in prompt
+    assert "초등학생 흉내" in prompt  # explicit ban
+
+    # Layer 3 markers (unit + persona + misconceptions + goals)
     assert "테스트 단원" in prompt
-    assert "루나" in prompt
+    assert "지후" in prompt
+    assert "초등 5학년" in prompt  # target grade line
+    assert "오개념 1" in prompt
     assert "개념 A" in prompt
 
 
-def test_layer1_invariant_text_reachable():
-    # Guard: any accidental mutation of the principle text would break this.
-    assert "사고 구조" not in LAYER1_VYGOTSKY_PRINCIPLES or "매개" in LAYER1_VYGOTSKY_PRINCIPLES
-    assert "막힘" in LAYER1_VYGOTSKY_PRINCIPLES
-    assert "기여를 점차 줄입니다" in LAYER1_VYGOTSKY_PRINCIPLES
-
-
-def test_unit_layer_includes_persona_and_rubric():
-    cfg = _make_config(GradeLevel.HIGH)
+def test_initial_misconceptions_explicit():
+    cfg = _make_config(persona_initial_misconceptions=["오개념 2"])
     layer3 = build_unit_layer(cfg)
-    assert "루나" in layer3
-    assert "또래 친구" in layer3
-    assert "필수" in layer3  # rubric required marker
-    assert "선택" in layer3  # rubric optional marker
-    assert "오개념 1" in layer3
+    # The explicitly-picked active misconception must appear under the "실제로 품고 있는" block.
+    assert "실제로 품고 있는 오개념" in layer3
+    assert "오개념 2" in layer3
+
+
+def test_missing_initial_misconceptions_falls_back_to_common():
+    cfg = _make_config(persona_initial_misconceptions=[])
+    layer3 = build_unit_layer(cfg)
+    assert "오개념 1" in layer3  # from common_misconceptions
+
+
+def test_target_grade_optional():
+    cfg = _make_config(target_grade_for_teaching=None)
+    layer3 = build_unit_layer(cfg)
+    assert "초등" not in layer3.split("【당신(AI)의 페르소나】")[0] or "단원:" in layer3
+    # At minimum: no crash, unit_name still present
+    assert "테스트 단원" in layer3
 
 
 def test_textbook_content_truncated():
-    cfg = _make_config(GradeLevel.HIGH).model_copy(update={"textbook_content": "x" * 5000})
+    cfg = _make_config(textbook_content="x" * 5000)
     layer3 = build_unit_layer(cfg)
     assert "(이하 생략)" in layer3
+
+
+def test_layer1_invariants_preserved():
+    # Guard against accidental mutation of the 6 principles text.
+    for marker in [
+        "답을 먼저 주지 않는다",
+        "주도성을 지킵니다",
+        "기여를 점차 줄입니다",
+        "사고 방식을 매개합니다",
+        "메타인지를 자극합니다",
+        "정서적으로 안전한 공간",
+    ]:
+        assert marker in LAYER1_VYGOTSKY_PRINCIPLES, f"Missing principle marker: {marker}"
+
+
+def test_layer2_preservice_mentions_role_reversal():
+    assert "동료 학습자" in LAYER2_PRESERVICE
+    assert "초등학생 흉내" in LAYER2_PRESERVICE  # explicit guardrail
