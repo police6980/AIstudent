@@ -73,7 +73,12 @@ def list_units(configs_dir: Path = CONFIGS_DIR) -> list[UnitSummary]:
         return []
 
     out: list[UnitSummary] = []
+    # Files that live in configs/ but are not unit YAMLs. Excluded silently
+    # so the instructor doesn't see spurious warnings.
+    _NON_UNIT_FILENAMES = {"reflection_questions.yaml", "reflection_questions.yml"}
     for p in sorted(dir_path.glob("*.yaml")) + sorted(dir_path.glob("*.yml")):
+        if p.name in _NON_UNIT_FILENAMES:
+            continue
         try:
             cfg = load_unit_config(p)
         except Exception as exc:  # noqa: BLE001 - any parse error should just skip
