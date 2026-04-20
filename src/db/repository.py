@@ -10,8 +10,8 @@ from sqlalchemy import select
 
 from src.db.database import get_session_factory
 from src.models.db_models import HintRequestRow, SessionRow, TurnRow
-from src.models.enums import HintType, Speaker
-from src.models.schemas import HintRequest, Turn, UnitConfig
+from src.models.enums import HintType, SessionStatus, Speaker
+from src.models.schemas import HintRequest, SessionInfo, Turn, UnitConfig
 
 
 def _new_id() -> str:
@@ -26,39 +26,69 @@ class SessionRepository:
 
     # -- sessions --------------------------------------------------------
 
-    def create_session(self, student_name: str, unit_config: UnitConfig) -> str:
-        """Create a new session row and return its id."""
+    def create_session(self, unit_config: UnitConfig, student_id: str) -> str:
+        """Create a new in_progress session for (unit_code, student_id)."""
 
         session_id = _new_id()
         with self._factory() as db:
             row = SessionRow(
                 id=session_id,
-                session_code=unit_config.session_code,
-                student_name=student_name,
-                grade_level=unit_config.grade_level.value,
+                unit_code=unit_config.unit_code,
+                student_id=student_id,
                 unit_name=unit_config.unit_name,
                 persona_name=unit_config.persona_name,
                 unit_config_json=unit_config.model_dump(mode="json"),
                 start_time=datetime.utcnow(),
+                status=SessionStatus.IN_PROGRESS.value,
                 hints_remaining=unit_config.hint_max_count,
             )
             db.add(row)
             db.commit()
         return session_id
 
-    def end_session(self, session_id: str) -> None:
-        """Stamp end_time on the given session."""
+    def complete_session(self, session_id: str) -> None:
+        """Mark the session as completed and stamp end_time."""
 
         with self._factory() as db:
             row = db.get(SessionRow, session_id)
             if row is None:
                 raise LookupError(f"Session not found: {session_id}")
             row.end_time = datetime.utcnow()
+            row.status = SessionStatus.COMPLETED.value
             db.commit()
 
     def get_session(self, session_id: str) -> Optional[SessionRow]:
         with self._factory() as db:
             return db.get(SessionRow, session_id)
+
+    def find_session(self, unit_code: str, student_id: str) -> Optional[SessionInfo]:
+        """Return the most recent session for (unit_code, student_id), if any."""
+
+        with self._factory() as db:
+            row = (
+                db.execute(
+                    select(SessionRow)
+                    .where(
+                        SessionRow.unit_code == unit_code,
+                        SessionRow.student_id == student_id,
+                    )
+                    .order_by(SessionRow.start_time.desc())
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            if row is None:
+                return None
+            return SessionInfo(
+                session_id=row.id,
+                unit_code=row.unit_code,
+                student_id=row.student_id,
+                persona_name=row.persona_name,
+                start_time=row.start_time,
+                end_time=row.end_time,
+                status=SessionStatus(row.status),
+            )
 
     # -- turns -----------------------------------------------------------
 
@@ -72,12 +102,11 @@ class SessionRepository:
         hint_type_used: HintType | None = None,
         annotations: dict | None = None,
     ) -> Turn:
-        """Append a new turn and return it as a Pydantic Turn."""
+        """Append a new turn, atomically computing turn_index."""
 
         turn_id = _new_id()
         ts = datetime.utcnow()
         with self._factory() as db:
-            # Determine next turn_index atomically within this transaction.
             existing = db.execute(
                 select(TurnRow.turn_index)
                 .where(TurnRow.session_id == session_id)
@@ -112,8 +141,6 @@ class SessionRepository:
         )
 
     def get_turns(self, session_id: str) -> list[Turn]:
-        """Return all turns for a session ordered by turn_index."""
-
         with self._factory() as db:
             rows = (
                 db.execute(
@@ -176,3 +203,15 @@ class SessionRepository:
             if row is None:
                 raise LookupError(f"Session not found: {session_id}")
             return row.hints_remaining
+
+    # -- analysis (Phase B hook) ----------------------------------------
+
+    def save_analysis(self, session_id: str, analysis: dict) -> None:
+        """Persist the Phase B analysis JSON onto the session row."""
+
+        with self._factory() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None:
+                raise LookupError(f"Session not found: {session_id}")
+            row.analysis_json = analysis
+            db.commit()
