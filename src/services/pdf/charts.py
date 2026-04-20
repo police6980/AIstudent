@@ -29,7 +29,34 @@ _PREFERRED_KR_FONTS = (
 )
 
 
+def _refresh_font_cache_if_stale() -> None:
+    """If no CJK font is visible, scan common system paths and add them."""
+
+    names = {f.name for f in font_manager.fontManager.ttflist}
+    if any(n in names for n in _PREFERRED_KR_FONTS):
+        return
+    candidates = [
+        "/usr/share/fonts/truetype/nanum",
+        "/usr/share/fonts/opentype/noto",
+        "/usr/share/fonts/truetype/noto",
+    ]
+    added = 0
+    for d in candidates:
+        try:
+            for fp in font_manager.findSystemFonts(fontpaths=d):
+                try:
+                    font_manager.fontManager.addfont(fp)
+                    added += 1
+                except Exception:  # noqa: BLE001
+                    continue
+        except Exception:  # noqa: BLE001
+            continue
+    if added:
+        logger.info("Registered %d CJK font files with matplotlib.", added)
+
+
 def _apply_korean_font() -> None:
+    _refresh_font_cache_if_stale()
     available = {f.name for f in font_manager.fontManager.ttflist}
     for name in _PREFERRED_KR_FONTS:
         if name in available:
