@@ -28,6 +28,11 @@ class SessionRow(Base):
     status: Mapped[str] = mapped_column(String(32), default="in_progress", index=True)
     hints_remaining: Mapped[int] = mapped_column(Integer, default=0)
     analysis_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Phase B: pre/post Novak concept maps + initial diagnosis + reflection answers
+    pre_concept_map_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    post_concept_map_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    initial_diagnosis_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reflection_answers_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     turns: Mapped[list[TurnRow]] = relationship(
         back_populates="session", cascade="all, delete-orphan", order_by="TurnRow.turn_index"

@@ -1,5 +1,13 @@
 """Data models: enums, Pydantic schemas, SQLAlchemy tables."""
 
+from src.models.concept_map import (
+    Concept,
+    ConceptMap,
+    ConceptMapScore,
+    CrossLink,
+    Example,
+    Proposition,
+)
 from src.models.enums import HintType, SessionStatus, Speaker
 from src.models.schemas import (
     HintRequest,
@@ -22,4 +30,10 @@ __all__ = [
     "HintRequest",
     "SessionInfo",
     "SessionReport",
+    "Concept",
+    "Proposition",
+    "CrossLink",
+    "Example",
+    "ConceptMap",
+    "ConceptMapScore",
 ]

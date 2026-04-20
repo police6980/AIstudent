@@ -215,3 +215,25 @@ class SessionRepository:
                 raise LookupError(f"Session not found: {session_id}")
             row.analysis_json = analysis
             db.commit()
+
+    # -- concept maps / diagnosis / reflection (Phase B) ----------------
+
+    def save_pre_concept_map(self, session_id: str, payload: dict) -> None:
+        self._save_json_column(session_id, "pre_concept_map_json", payload)
+
+    def save_post_concept_map(self, session_id: str, payload: dict) -> None:
+        self._save_json_column(session_id, "post_concept_map_json", payload)
+
+    def save_initial_diagnosis(self, session_id: str, payload: dict) -> None:
+        self._save_json_column(session_id, "initial_diagnosis_json", payload)
+
+    def save_reflection_answers(self, session_id: str, payload: dict) -> None:
+        self._save_json_column(session_id, "reflection_answers_json", payload)
+
+    def _save_json_column(self, session_id: str, column: str, value: dict) -> None:
+        with self._factory() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None:
+                raise LookupError(f"Session not found: {session_id}")
+            setattr(row, column, value)
+            db.commit()
