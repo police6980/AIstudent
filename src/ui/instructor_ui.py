@@ -40,6 +40,7 @@ from src.services.instructor_service import (
     delete_unit,
     list_sessions,
     list_units,
+    rerun_analysis,
     reset_session_to_in_progress,
     save_reference_upload,
     save_unit_config,
@@ -309,11 +310,23 @@ def build_instructor_app() -> gr.Blocks:
                             label="잠금 해제할 session_id (전체 ID 입력)"
                         )
                         reset_session_btn = gr.Button("잠금 해제")
+
+                    gr.Markdown(
+                        "### 분석 다시 실행\n"
+                        "완료된 세션의 LLM 분석(오개념 추적·비계 품질·설명 품질·개념도 변화·"
+                        "성찰 분석)을 다시 돌립니다. 진단 YAML 을 수정한 뒤 기존 세션에 "
+                        "반영하고 싶을 때 사용하세요. 수십 초~1분 정도 걸려요."
+                    )
+                    with gr.Row():
+                        rerun_session_id_in = gr.Textbox(
+                            label="재분석할 session_id (전체 ID 입력)"
+                        )
+                        rerun_btn = gr.Button("분석 재실행", variant="primary")
                     sessions_msg = gr.Markdown("")
 
                     gr.Markdown(
                         "📄 **PDF 리포트 다운로드는 Phase B5에서 제공됩니다.** "
-                        "지금은 세션 메타·턴 수까지만 확인 가능해요."
+                        "지금은 분석 JSON 까지 DB에 저장되며, PDF 생성기가 이 데이터를 읽어 렌더링할 예정입니다."
                     )
 
         # ================ handlers ================
@@ -505,6 +518,23 @@ def build_instructor_app() -> gr.Blocks:
                 return _sessions_table(), f"⚠️ 실패: {exc}"
             return _sessions_table(), f"✅ 잠금 해제: `{session_id}`"
 
+        def on_rerun_analysis(session_id: str) -> str:
+            session_id = (session_id or "").strip()
+            if not session_id:
+                return "⚠️ session_id 를 입력하세요."
+            try:
+                err_count = rerun_analysis(session_id)
+            except LookupError as exc:
+                return f"⚠️ 실패: {exc}"
+            except Exception as exc:  # noqa: BLE001
+                return f"⚠️ 재분석 중 오류: {exc}"
+            if err_count == 0:
+                return f"✅ `{session_id}` 재분석 완료. 모든 모듈 정상."
+            return (
+                f"⚠️ `{session_id}` 재분석 완료. 일부 모듈에서 {err_count}건의 오류 발생 — "
+                "세션 DB의 analysis_json 을 확인하세요."
+            )
+
         # ================ wiring ================
 
         if admin_enabled():
@@ -597,5 +627,6 @@ def build_instructor_app() -> gr.Blocks:
             inputs=[reset_session_id_in],
             outputs=[sessions_df, sessions_msg],
         )
+        rerun_btn.click(on_rerun_analysis, inputs=[rerun_session_id_in], outputs=[sessions_msg])
 
     return app

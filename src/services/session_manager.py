@@ -32,6 +32,7 @@ from src.db.repository import SessionRepository
 from src.models.concept_map import ConceptMap
 from src.models.enums import SessionStatus, SessionStep, Speaker
 from src.models.schemas import Turn, UnitConfig
+from src.services.analysis import run_full_analysis
 from src.services.claude_service import ClaudeService, ClaudeServiceError
 from src.services.concept_maps import (
     InitialDiagnosis,
@@ -304,8 +305,16 @@ class SessionManager:
             raise ValueError("\n".join(problems))
 
         self._repo.save_reflection_answers(session_id, normalized)
-        # Mark completed. Phase B4/B5 will produce the analysis + PDF here.
+        # Mark completed first so the analysis orchestrator's completeness
+        # check passes.
         self._repo.complete_session(session_id)
+        # Run the full analysis pipeline. This is slow (~30-60s, several
+        # Claude calls) but individual failures are swallowed into the
+        # analysis bundle so the student still transitions to COMPLETED.
+        try:
+            run_full_analysis(session_id, repo=self._repo)
+        except Exception as exc:  # noqa: BLE001 - never block completion
+            logger.exception("run_full_analysis crashed: %s", exc)
 
     # -- read-only helpers ----------------------------------------------
 

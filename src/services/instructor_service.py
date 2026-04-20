@@ -193,3 +193,18 @@ def reset_session_to_in_progress(session_id: str) -> None:
         row.status = SessionStatus.IN_PROGRESS.value
         row.end_time = None
         db.commit()
+
+
+def rerun_analysis(session_id: str) -> int:
+    """Re-run the analysis pipeline on a completed session.
+
+    Returns the number of analyzer errors encountered (0 = perfect).
+    Imported lazily so the instructor service stays free of heavy deps
+    until someone actually asks for a rerun.
+    """
+
+    from src.db.repository import SessionRepository
+    from src.services.analysis import run_full_analysis
+
+    bundle = run_full_analysis(session_id, repo=SessionRepository())
+    return len(bundle.errors)
