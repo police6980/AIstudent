@@ -38,6 +38,7 @@ from src.services.instructor_service import (
     admin_enabled,
     delete_reference,
     delete_unit,
+    get_report_paths_for_session,
     list_sessions,
     list_units,
     rerun_analysis,
@@ -324,10 +325,15 @@ def build_instructor_app() -> gr.Blocks:
                         rerun_btn = gr.Button("분석 재실행", variant="primary")
                     sessions_msg = gr.Markdown("")
 
-                    gr.Markdown(
-                        "📄 **PDF 리포트 다운로드는 Phase B5에서 제공됩니다.** "
-                        "지금은 분석 JSON 까지 DB에 저장되며, PDF 생성기가 이 데이터를 읽어 렌더링할 예정입니다."
-                    )
+                    gr.Markdown("### PDF 다운로드")
+                    with gr.Row():
+                        download_session_id_in = gr.Textbox(
+                            label="다운로드할 session_id (전체 ID)"
+                        )
+                        download_btn = gr.Button("불러오기")
+                    with gr.Row():
+                        summary_file_inst = gr.File(label="요약", interactive=False)
+                        detail_file_inst = gr.File(label="상세", interactive=False)
 
         # ================ handlers ================
 
@@ -518,6 +524,20 @@ def build_instructor_app() -> gr.Blocks:
                 return _sessions_table(), f"⚠️ 실패: {exc}"
             return _sessions_table(), f"✅ 잠금 해제: `{session_id}`"
 
+        def on_download_reports(session_id: str) -> tuple[Any, Any, str]:
+            session_id = (session_id or "").strip()
+            if not session_id:
+                return None, None, "⚠️ session_id 를 입력하세요."
+            summary, detail = get_report_paths_for_session(session_id)
+            if not summary:
+                return (
+                    None,
+                    None,
+                    "⚠️ 해당 세션의 PDF 가 아직 없거나 세션을 찾을 수 없어요. "
+                    "완료된 세션인지 확인하거나 '분석 재실행' 을 먼저 눌러주세요.",
+                )
+            return summary, detail, f"✅ `{session_id}` 리포트 2건 로드됨."
+
         def on_rerun_analysis(session_id: str) -> str:
             session_id = (session_id or "").strip()
             if not session_id:
@@ -628,5 +648,10 @@ def build_instructor_app() -> gr.Blocks:
             outputs=[sessions_df, sessions_msg],
         )
         rerun_btn.click(on_rerun_analysis, inputs=[rerun_session_id_in], outputs=[sessions_msg])
+        download_btn.click(
+            on_download_reports,
+            inputs=[download_session_id_in],
+            outputs=[summary_file_inst, detail_file_inst, sessions_msg],
+        )
 
     return app

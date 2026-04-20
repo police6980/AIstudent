@@ -208,10 +208,16 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
             gr.Markdown("## ✅ 모든 단계를 완료했어요")
             completed_info = gr.Markdown("")
             gr.Markdown(
-                "📄 **PDF 리포트 다운로드는 Phase B5에서 제공됩니다.**\n"
-                "지금은 모든 데이터(초기 개념도, 대화, 사후 개념도, 성찰)가 안전하게 "
-                "저장되었습니다. 교수자가 분석 리포트를 생성할 수 있어요."
+                "📄 **리포트 파일 2개를 내려받아 교수자에게 제출하세요.**\n"
+                "- `요약.pdf` — 핵심 개요 (2페이지)\n"
+                "- `상세.pdf` — 대화 전사·개념도 변화·분석 전체 (여러 페이지)\n\n"
+                "분석 생성에 수십 초~1분이 걸릴 수 있어요. "
+                "버튼이 보이지 않으면 '다시 불러오기' 를 눌러주세요."
             )
+            with gr.Row():
+                summary_file = gr.File(label="요약 리포트", interactive=False)
+                detail_file = gr.File(label="상세 리포트", interactive=False)
+            refresh_reports_btn = gr.Button("🔄 리포트 다시 불러오기")
 
         # ========================= handlers =================================
 
@@ -357,18 +363,31 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
 
         question_ids = [q.id for q in questions]
 
+        def _fetch_report_files(session_id: str | None) -> tuple[Any, Any]:
+            if not session_id:
+                return None, None
+            paths = mgr.get_report_paths(session_id)
+            if paths is None:
+                return None, None
+            return str(paths.summary), str(paths.detail)
+
         def on_submit_reflection(session_id: str | None, *answers: str) -> tuple[Any, ...]:
             if not session_id:
-                return (*_show("login"), "⚠️ 로그인 먼저 하세요.", "")
+                return (*_show("login"), "⚠️ 로그인 먼저 하세요.", "", None, None)
             ans_map = dict(zip(question_ids, answers))
             try:
                 mgr.submit_reflection_answers(session_id, ans_map)
             except (SessionLockedError, StepViolationError, LookupError) as exc:
-                return (*_show("reflection"), f"⚠️ {exc}", "")
+                return (*_show("reflection"), f"⚠️ {exc}", "", None, None)
             except ValueError as exc:
-                return (*_show("reflection"), f"⚠️ 제출 실패:\n{exc}", "")
+                return (*_show("reflection"), f"⚠️ 제출 실패:\n{exc}", "", None, None)
             info = f"세션 ID: `{session_id}`"
-            return (*_show("completed"), "", info)
+            summary_path, detail_path = _fetch_report_files(session_id)
+            return (*_show("completed"), "", info, summary_path, detail_path)
+
+        def on_refresh_reports(session_id: str | None) -> tuple[Any, Any]:
+            summary_path, detail_path = _fetch_report_files(session_id)
+            return summary_path, detail_path
 
         # ============================ wiring ================================
 
@@ -470,7 +489,15 @@ def build_student_app(manager: SessionManager | None = None) -> gr.Blocks:
                 completed_pane,
                 reflection_msg,
                 completed_info,
+                summary_file,
+                detail_file,
             ],
+        )
+
+        refresh_reports_btn.click(
+            on_refresh_reports,
+            inputs=[session_state],
+            outputs=[summary_file, detail_file],
         )
 
     return app

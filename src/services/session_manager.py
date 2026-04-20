@@ -39,6 +39,7 @@ from src.services.concept_maps import (
     diagnose_initial_concept_map,
 )
 from src.services.diagnostics import load_reflection_questions
+from src.services.pdf import ReportPaths, generate_reports_for_session
 from src.services.scaffolding_engine import build_system_prompt
 
 logger = logging.getLogger(__name__)
@@ -315,6 +316,36 @@ class SessionManager:
             run_full_analysis(session_id, repo=self._repo)
         except Exception as exc:  # noqa: BLE001 - never block completion
             logger.exception("run_full_analysis crashed: %s", exc)
+        # Generate the PDF reports too. Also non-blocking.
+        try:
+            generate_reports_for_session(session_id, repo=self._repo)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("PDF generation crashed: %s", exc)
+
+    def get_report_paths(self, session_id: str) -> ReportPaths | None:
+        """Return the (summary, detail) PDF paths if they exist on disk."""
+
+        from pathlib import Path
+
+        from src.config.settings import get_settings
+
+        row = self._repo.get_session(session_id)
+        if row is None:
+            return None
+        settings = get_settings()
+        candidates = list(
+            Path(settings.report_dir).glob(
+                f"{row.unit_code}_{row.student_id}_{session_id[:8]}"
+            )
+        )
+        if not candidates:
+            return None
+        out_dir = candidates[0]
+        summary = out_dir / "summary.pdf"
+        detail = out_dir / "detail.pdf"
+        if summary.exists() and detail.exists():
+            return ReportPaths(summary=summary, detail=detail)
+        return None
 
     # -- read-only helpers ----------------------------------------------
 

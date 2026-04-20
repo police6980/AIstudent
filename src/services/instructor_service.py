@@ -196,15 +196,48 @@ def reset_session_to_in_progress(session_id: str) -> None:
 
 
 def rerun_analysis(session_id: str) -> int:
-    """Re-run the analysis pipeline on a completed session.
+    """Re-run the analysis pipeline + PDF generation on a completed session.
 
     Returns the number of analyzer errors encountered (0 = perfect).
-    Imported lazily so the instructor service stays free of heavy deps
+    Imports are lazy so the instructor service stays free of heavy deps
     until someone actually asks for a rerun.
     """
 
     from src.db.repository import SessionRepository
     from src.services.analysis import run_full_analysis
+    from src.services.pdf import generate_reports_for_session
 
-    bundle = run_full_analysis(session_id, repo=SessionRepository())
+    repo = SessionRepository()
+    bundle = run_full_analysis(session_id, repo=repo)
+    try:
+        generate_reports_for_session(session_id, repo=repo)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("PDF regeneration failed for %s: %s", session_id, exc)
     return len(bundle.errors)
+
+
+def get_report_paths_for_session(session_id: str):
+    """Return (summary_path, detail_path) or (None, None) for a session."""
+
+    from pathlib import Path
+
+    from src.config.settings import get_settings
+    from src.db.repository import SessionRepository
+
+    row = SessionRepository().get_session(session_id)
+    if row is None:
+        return None, None
+    settings = get_settings()
+    candidates = list(
+        Path(settings.report_dir).glob(
+            f"{row.unit_code}_{row.student_id}_{session_id[:8]}"
+        )
+    )
+    if not candidates:
+        return None, None
+    out_dir = candidates[0]
+    summary = out_dir / "summary.pdf"
+    detail = out_dir / "detail.pdf"
+    if not summary.exists() or not detail.exists():
+        return None, None
+    return str(summary), str(detail)
