@@ -1,92 +1,91 @@
 @echo off
-chcp 65001 > nul
 cd /d "%~dp0.."
 setlocal
 
 echo ============================================================
-echo   [ 1 / 3 ]  예비교사 과학 설명 훈련  -  첫 세팅
+echo   [ 1 / 3 ]  Preservice Teacher Training  -  First Setup
 echo ============================================================
 echo.
 
 REM --- Python check -------------------------------------------
 where python >nul 2>&1
 if errorlevel 1 (
-    echo [X] Python 이 설치되어 있지 않습니다.
+    echo [X] Python is not installed.
     echo.
-    echo     다운로드: https://www.python.org/downloads/
+    echo     Download: https://www.python.org/downloads/
     echo.
-    echo     * 설치할 때 "Add Python to PATH" 체크박스 반드시 체크
-    echo     * 설치 끝나면 이 창 닫고 setup.bat 다시 더블클릭
+    echo     IMPORTANT: Check "Add Python to PATH" during install
+    echo     Then close this window and double-click 1_setup.bat again
     echo.
     pause
     exit /b 1
 )
 
 for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PYVER=%%v
-echo [OK] Python %PYVER% 확인
+echo [OK] Python %PYVER% detected
 
 REM --- venv ---------------------------------------------------
 if not exist .venv (
     echo.
-    echo [..] 가상환경 생성 중...
+    echo [..] Creating virtual environment...
     python -m venv .venv
     if errorlevel 1 (
-        echo [X] 가상환경 생성 실패
+        echo [X] venv creation failed
         pause
         exit /b 1
     )
-    echo [OK] 가상환경 생성 완료
+    echo [OK] venv created
 ) else (
-    echo [OK] 가상환경 이미 있음
+    echo [OK] venv already exists
 )
 
 REM --- pip install --------------------------------------------
 echo.
-echo [..] 라이브러리 설치 중...  (2 ~ 5 분 걸립니다. 기다려주세요)
+echo [..] Installing libraries... (2-5 minutes, please wait)
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip --quiet
 if errorlevel 1 (
-    echo [X] pip 업그레이드 실패 - 인터넷 연결 확인
+    echo [X] pip upgrade failed - check internet connection
     pause
     exit /b 1
 )
 pip install -r requirements.txt --quiet
 if errorlevel 1 (
-    echo [X] 라이브러리 설치 실패 - 오류 메시지 위를 확인
+    echo [X] Library install failed - see error above
     pause
     exit /b 1
 )
-echo [OK] 라이브러리 설치 완료
+echo [OK] Libraries installed
 
 REM --- .env ---------------------------------------------------
 echo.
 if not exist .env (
     copy /Y .env.example .env >nul
-    echo [!] .env 파일을 만들었습니다.
+    echo [!] Created .env file.
     echo.
-    echo     이제 메모장이 열립니다. 아래 두 줄을 채우세요:
+    echo     Notepad will now open. Fill in two lines:
     echo.
-    echo       ANTHROPIC_API_KEY=sk-ant-api03-...  (여기에 키 붙여넣기)
-    echo       INSTRUCTOR_PASSWORD=원하는비밀번호
+    echo       ANTHROPIC_API_KEY=sk-ant-api03-...  (your API key)
+    echo       INSTRUCTOR_PASSWORD=any-password-you-want
     echo.
-    echo     * 키는 https://console.anthropic.com 에서 새로 발급
-    echo     * 저장하고 메모장 닫으면 됩니다
+    echo     * Get API key at: https://console.anthropic.com
+    echo     * Save and close Notepad when done
     echo.
     pause
     notepad .env
 ) else (
-    echo [OK] .env 파일 이미 있음
+    echo [OK] .env already exists
 )
 
 echo.
 echo ============================================================
-echo   [OK] 세팅 완료!
+echo   [OK] Setup complete!
 echo ============================================================
 echo.
-echo 다음 단계:
+echo Next steps:
 echo.
-echo   [ 2 / 3 ]  2_create_unit.bat  더블클릭  (단원 만들기)
-echo   [ 3 / 3 ]  3_run_app.bat      더블클릭  (앱 실행)
+echo   [ 2 / 3 ]  Double-click  2_create_unit.bat   (make a unit)
+echo   [ 3 / 3 ]  Double-click  3_run_app.bat       (run the app)
 echo.
 pause
 endlocal

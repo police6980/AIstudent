@@ -1,46 +1,45 @@
 @echo off
-chcp 65001 > nul
 cd /d "%~dp0.."
 setlocal
 
 echo ============================================================
-echo   [ 2 / 3 ]  단원 만들기 + 학생 계정 30개 생성
+echo   [ 2 / 3 ]  Create a unit + 30 student accounts
 echo ============================================================
 echo.
 
 if not exist .venv (
-    echo [X] 가상환경이 없습니다. 먼저 1_setup.bat 을 실행하세요.
+    echo [X] venv not found. Run 1_setup.bat first.
     pause
     exit /b 1
 )
 
 if not exist .env (
-    echo [X] .env 가 없습니다. 먼저 1_setup.bat 을 실행하세요.
+    echo [X] .env not found. Run 1_setup.bat first.
     pause
     exit /b 1
 )
 
 call .venv\Scripts\activate.bat
 
-echo 이제 몇 가지 질문에 답하세요. 그대로 쓸 값엔 그냥 Enter 만 누르면 됩니다.
+echo Answer the prompts. Press Enter to accept the default shown in brackets.
 echo.
 python scripts\pilot_setup.py
 if errorlevel 1 (
     echo.
-    echo [X] 단원 생성 중 오류 발생
+    echo [X] Unit creation failed
     pause
     exit /b 1
 )
 
 echo.
 echo ============================================================
-echo   [OK] 단원 생성 완료!
+echo   [OK] Unit created!
 echo ============================================================
 echo.
-echo 이제 3_run_app.bat 을 더블클릭해서 앱을 실행하세요.
+echo Next: double-click 3_run_app.bat to launch the app.
 echo.
-echo 생성된 배포용 계정 파일:  configs\*.accounts.txt
-echo (학생에게 한 줄씩 나눠서 보내면 됩니다)
+echo Your student credentials are in:  configs\*.accounts.txt
+echo (Send each student one line from that file)
 echo.
 pause
 endlocal
