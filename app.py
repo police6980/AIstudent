@@ -58,7 +58,10 @@ with gr.Blocks(title="예비교사 과학 설명 훈련") as demo:
 
     demo.load(_on_load, inputs=None, outputs=[_student_group, _instructor_group])
 
-# Note: HF Spaces auto-launches `demo` when SDK is set to gradio.
-# We intentionally do NOT call demo.launch() here — having it called twice
-# (once by HF, once by __main__) can confuse the new Gradio 5 startup path
-# and surface as "No API found" in the Space iframe.
+
+# Launch at module level (not inside __name__ == '__main__') so that HF's
+# `python app.py` execution actually starts the Gradio server. With the
+# __main__ guard Gradio 5 still launched, but removing the launch entirely
+# caused the script to exit cleanly (exit code 0) and HF showed
+# "No API found" because no server was ever bound.
+demo.launch()
