@@ -96,17 +96,27 @@ def _claude_messages_call(
             ) from exc
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
+    # Opus 4.7 rejects `temperature`. Older models accept it. Try with, then retry without.
+    kwargs = {
+        "model": settings.claude_analysis_model,
+        "max_tokens": 2048,
+        "system": system_prompt,
+        "messages": [{"role": "user", "content": user_prompt}],
+    }
     try:
-        response = client.messages.create(
-            model=settings.claude_analysis_model,
-            max_tokens=2048,
-            temperature=0.2,  # analytic task — keep it deterministic
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
+        response = client.messages.create(temperature=0.2, **kwargs)
     except Exception as exc:
-        logger.exception("Claude analysis call failed")
-        raise ClaudeServiceError(f"Claude analysis call failed: {exc}") from exc
+        msg = str(exc).lower()
+        if "temperature" in msg and ("deprecated" in msg or "not" in msg):
+            logger.info("Retrying analysis call without temperature (model rejects it).")
+            try:
+                response = client.messages.create(**kwargs)
+            except Exception as exc2:
+                logger.exception("Claude analysis call failed on retry")
+                raise ClaudeServiceError(f"Claude analysis call failed: {exc2}") from exc2
+        else:
+            logger.exception("Claude analysis call failed")
+            raise ClaudeServiceError(f"Claude analysis call failed: {exc}") from exc
 
     chunks: list[str] = []
     for block in getattr(response, "content", []) or []:

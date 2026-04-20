@@ -77,17 +77,26 @@ class ClaudeService:
                 }
             ]
 
+        kwargs = {
+            "model": self._settings.claude_model,
+            "max_tokens": max_tokens,
+            "system": system_prompt,
+            "messages": messages,
+        }
         try:
-            response = client.messages.create(
-                model=self._settings.claude_model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system_prompt,
-                messages=messages,
-            )
+            response = client.messages.create(temperature=temperature, **kwargs)
         except Exception as exc:
-            logger.exception("Claude API call failed")
-            raise ClaudeServiceError(f"Claude API call failed: {exc}") from exc
+            msg = str(exc).lower()
+            if "temperature" in msg and ("deprecated" in msg or "not" in msg):
+                logger.info("Retrying dialogue call without temperature.")
+                try:
+                    response = client.messages.create(**kwargs)
+                except Exception as exc2:
+                    logger.exception("Claude API call failed on retry")
+                    raise ClaudeServiceError(f"Claude API call failed: {exc2}") from exc2
+            else:
+                logger.exception("Claude API call failed")
+                raise ClaudeServiceError(f"Claude API call failed: {exc}") from exc
 
         # Anthropic returns a list of content blocks; concatenate text blocks.
         chunks: list[str] = []
