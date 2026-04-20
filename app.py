@@ -58,6 +58,7 @@ with gr.Blocks(title="예비교사 과학 설명 훈련") as demo:
 
     demo.load(_on_load, inputs=None, outputs=[_student_group, _instructor_group])
 
-
-if __name__ == "__main__":
-    demo.launch()
+# Note: HF Spaces auto-launches `demo` when SDK is set to gradio.
+# We intentionally do NOT call demo.launch() here — having it called twice
+# (once by HF, once by __main__) can confuse the new Gradio 5 startup path
+# and surface as "No API found" in the Space iframe.
